@@ -24,29 +24,37 @@
 
 ### 前置条件
 
-- macOS（已测试）/ Linux / Windows
-- Python 3.8+
-- 推荐 [uv](https://github.com/astral-sh/uv)（也支持 pip）
-- 本地 Chrome 已登录 sycm.taobao.com
+- **macOS**（已测试）— Linux/Windows 理论可用但 cookie 解密差异未测
+- **Google Chrome**（不是 Brave/Edge/Arc/Safari）已登录 sycm.taobao.com
+- **uv**（推荐）或 Python 3.8+ + pip
 
-### 安装
+### 装 uv（一次性）
 
 ```bash
-# 1. 克隆到 Claude Code 的 skill 目录
-git clone <YOUR_REPO_URL> ~/.claude/skills/sycm-cli
-
-# 或者克隆到任意位置后软链
-git clone <YOUR_REPO_URL> ~/sycm-cli
-ln -s ~/sycm-cli ~/.claude/skills/sycm-cli
+curl -LsSf https://astral.sh/uv/install.sh | sh
+# 重开终端
 ```
 
-### 验证安装
+### 安装本 skill
+
+```bash
+# 克隆到 Claude Code skill 目录
+git clone https://github.com/rakei076/sycm-cli.git ~/.claude/skills/sycm-cli
+```
+
+### 第一次跑
+
+**重要：先去 Chrome 打开并登录 https://sycm.taobao.com 一次**（cookie 存到本地）。
+
+然后：
 
 ```bash
 ~/.claude/skills/sycm-cli/scripts/sycm.sh doctor
 ```
 
-应看到：
+**macOS 用户首次运行会弹"钥匙串"授权弹窗** —— 这是 Chrome 的 cookie 用 macOS Keychain 加密，需要授权 Python 进程读它。点 **"始终允许"** 一次，以后就不再弹。
+
+成功的输出：
 ```
 == sycm-cli doctor ==
 ✓ 读到 N 个 taobao 域 cookie
@@ -54,7 +62,15 @@ ln -s ~/sycm-cli ~/.claude/skills/sycm-cli
 ✓ ...
 ```
 
-如果报"未找到淘宝登录态"，去 Chrome 登录 sycm.taobao.com 一次。
+### 常见报错
+
+| 报错 | 原因 | 处理 |
+|---|---|---|
+| `permission denied: scripts/sycm.sh` | 极少见（脚本执行位丢失） | `chmod +x ~/.claude/skills/sycm-cli/scripts/sycm.sh` |
+| `缺 Python 依赖` | 没装 uv | 按提示装 uv 或用 pip |
+| `未找到淘宝登录态` | Chrome 没登录 sycm | 去 Chrome 登录 sycm.taobao.com |
+| Keychain 弹窗 deny 了 | 拒绝了 Keychain 授权 | 钥匙串访问 → 找 "Chrome Safe Storage" → 把终端加进访问控制 |
+| 多个 Chrome profile | 默认读 Default，可能不是你登录的那个 | 改 `sycm_cli.py` 里 `browser_cookie3.chrome()` 传 `cookie_file=` |
 
 ### 一行命令拉数据
 
