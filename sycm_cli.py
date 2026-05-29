@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import random
 import sys
 import time
@@ -78,20 +79,31 @@ _request_count = 0
 _consecutive_fails = 0
 
 
-def _api_get(path: str, params: dict[str, Any], cookies: dict[str, str]) -> dict[str, Any]:
-    """对 sycm API 做一次 GET，带安全护栏。"""
+def _api_get(path: str, params: dict[str, Any], cookies: dict[str, str], referer: str | None = None) -> dict[str, Any]:
+    """对 sycm API 做一次 GET，带安全护栏。
+
+    path 处理规则：
+    - 以 `/` 开头 → 绝对路径，拼到 https://sycm.taobao.com 后
+    - 否则 → 相对路径，拼到 https://sycm.taobao.com/csp/api/ 后（旧 CSP 接口）
+    """
     global _request_count, _consecutive_fails
     if _request_count >= MAX_REQUESTS_PER_RUN:
         raise RuntimeError(f"单次运行已达 {MAX_REQUESTS_PER_RUN} 次请求上限，自动停止")
 
     hour = datetime.now().hour
-    if 1 <= hour < 6:
-        raise RuntimeError(f"夜间禁跑时段 (1:00–6:00)，当前 {hour} 点")
+    if 1 <= hour < 6 and not os.environ.get("SYCM_BYPASS_CURFEW"):
+        raise RuntimeError(
+            f"夜间禁跑时段 (1:00–6:00)，当前 {hour} 点。"
+            f"如需强制运行：SYCM_BYPASS_CURFEW=1 ..."
+        )
 
-    url = f"{API_BASE}/{path.lstrip('/')}"
+    if path.startswith("/"):
+        url = f"https://sycm.taobao.com{path}"
+    else:
+        url = f"{API_BASE}/{path}"
     headers = {
         "User-Agent": USER_AGENT,
-        "Referer": REFERER_DETAIL_PAGE,
+        "Referer": referer or REFERER_DETAIL_PAGE,
         "Accept": "application/json, text/plain, */*",
         "Accept-Language": "zh-CN,zh;q=0.9,ja;q=0.8,en;q=0.7",
     }
@@ -119,6 +131,91 @@ def _api_get(path: str, params: dict[str, Any], cookies: dict[str, str]) -> dict
         if _consecutive_fails >= MAX_CONSECUTIVE_FAILS:
             raise RuntimeError(f"连续 {MAX_CONSECUTIVE_FAILS} 次失败，自动停止") from None
         raise
+
+
+# ---------- 高频页面预设注册表 ----------
+#
+# 每个 preset 对应 sycm 的一个标准"日维度列表页面"。AI 代理可以一行命令调任一个。
+# 字段：
+#   path       — sycm API 路径
+#   orderBy    — 排序字段（找列表的关键参数，漏了大多返回 0 条）
+#   referer    — 对应的 sycm 页面 URL（API 风控会查 Referer，最好真实）
+#   desc       — 子命令帮助说明
+#   show       — 在结果摘要里展示的字段名列表（按顺序）
+
+LIST_PRESETS: dict[str, dict[str, Any]] = {
+    "reception-list": {
+        "path": "ww/consultation/detail/list",
+        "orderBy": "startTime",
+        "referer": "https://sycm.taobao.com/qos/service/frame/performance/detail/new",
+        "desc": "旺旺咨询接待明细 (服务/接待明细)",
+        "show": ["startTime", "endTime", "buyerNick", "psnNickName", "isUnReply"],
+    },
+    "evaluation-list": {
+        "path": "evaluation/detail/list",
+        "orderBy": "servTime",
+        "referer": "https://sycm.taobao.com/qos/service/after_sale/estimate",
+        "desc": "邀评/评价明细 (服务/售后评价)",
+        "show": ["servTime", "sendTime", "buyerNick", "psnNickName", "source", "lstEvaScore"],
+    },
+    "sale-shop-list": {
+        "path": "shop/sale/analysis/list",
+        "orderBy": "itemId",
+        "referer": "https://sycm.taobao.com/fa/frame/trade_overview",
+        "desc": "店铺商品销售排行 (商品/销售分析)",
+        "show": ["itemId", "itemTitle", "shopPayAmt1d", "shopPayItmCnt1d", "servPayAmt1d", "silentPayAmt1d"],
+    },
+    "sale-item-list": {
+        "path": "item/sale/detail/list",
+        "orderBy": "startTime",
+        "referer": "https://sycm.taobao.com/qos/service/frame/performance/detail/new",
+        "desc": "订单销售明细 (交易/订单明细)",
+        "show": ["createTime", "createAmt", "buyerNick", "accountNick", "isSlientFlow"],
+    },
+    "sale-cs-list": {
+        "path": "ww/sale/detail/list",
+        "orderBy": "startTime",
+        "referer": "https://sycm.taobao.com/qos/service/frame/performance/detail/new",
+        "desc": "客服销售明细 (旺旺销售)",
+        "show": ["createTime", "buyerNick", "accountNick"],
+    },
+    "inquiry-loss-list": {
+        "path": "inquiry/loss/list",
+        "orderBy": "startTime",
+        "referer": "https://sycm.taobao.com/qos/service/frame/performance/detail/new",
+        "desc": "询单流失明细 (服务/咨询分析)",
+        "show": ["startTime", "endTime", "buyerNick", "psnNickName"],
+    },
+    "slow-rsps-list": {
+        "path": "slow/rsps/detail/list",
+        "orderBy": "startTime",
+        "referer": "https://sycm.taobao.com/qos/service/frame/performance/detail/new",
+        "desc": "慢响应明细 (服务/慢响应)",
+        "show": ["dateId", "startTime", "endTime", "buyerNick", "psnNickName"],
+    },
+}
+
+
+def fetch_preset(preset_name: str, *, start_date: str, end_date: str,
+                  page_no: int = 1, page_size: int = 10,
+                  cookies: dict[str, str] | None = None) -> dict[str, Any]:
+    """按预设名拉某个日期范围的列表。"""
+    preset = LIST_PRESETS[preset_name]
+    cookies = cookies or load_taobao_cookies()
+    sd = start_date.replace("-", "")
+    ed = end_date.replace("-", "")
+    params = {
+        "_": str(int(time.time() * 1000)),
+        "token": cookies.get("_tb_token_", ""),
+        "startDate": sd,
+        "endDate": ed,
+        "dateType": "day",
+        "dateRange": "day",
+        "orderBy": preset["orderBy"],
+        "pageNo": str(page_no),
+        "pageSize": str(page_size),
+    }
+    return _api_get(preset["path"], params, cookies, referer=preset["referer"])
 
 
 # ---------- 接口封装 ----------
@@ -226,6 +323,50 @@ def cmd_list(args: argparse.Namespace) -> None:
     print()
 
 
+def cmd_preset_list(args: argparse.Namespace) -> None:
+    """命名预设的列表查询：sycm-cli <preset-name> --date ... --limit N"""
+    end = args.end_date or args.date
+    data = fetch_preset(args.preset_name, start_date=args.date, end_date=end,
+                         page_no=args.page, page_size=args.limit)
+    if args.out:
+        Path(args.out).write_text(json.dumps(data, ensure_ascii=False, indent=2))
+        print(f"已写入 {args.out}", file=sys.stderr)
+        return
+    if args.raw:
+        print(json.dumps(data, ensure_ascii=False, indent=2))
+        return
+    preset = LIST_PRESETS[args.preset_name]
+    d = data.get("data", {})
+    rows = d.get("dataSource", []) or []
+    total = d.get("count")
+    print(f"# {preset['desc']}")
+    print(f"# {args.date}{' ~ ' + end if end != args.date else ''}  共 {total} 条，本页 {len(rows)}\n")
+    if not rows:
+        print("(空)")
+        return
+    show = preset["show"]
+    for i, r in enumerate(rows, 1):
+        vals = " | ".join(f"{k}={r.get(k, '?')}" for k in show)
+        print(f"[{i:2}] {vals}")
+
+
+def cmd_api(args: argparse.Namespace) -> None:
+    """通用 API 探测命令：sycm-cli api <path> --param key=val ..."""
+    cookies = load_taobao_cookies()
+    params: dict[str, str] = {
+        "_": str(int(time.time() * 1000)),
+        "token": cookies.get("_tb_token_", ""),
+    }
+    for kv in args.param or []:
+        if "=" not in kv:
+            print(f"⚠️  忽略无效参数: {kv}（格式应为 key=value）", file=sys.stderr)
+            continue
+        k, v = kv.split("=", 1)
+        params[k] = v
+    data = _api_get(args.path, params, cookies, referer=args.referer)
+    print(json.dumps(data, ensure_ascii=False, indent=2))
+
+
 def cmd_detail(args: argparse.Namespace) -> None:
     cookies = load_taobao_cookies()
     rows = fetch_chat_detail_all_pages(args.data_id, cookies)
@@ -331,6 +472,23 @@ def build_parser() -> argparse.ArgumentParser:
     fr.add_argument("--limit", type=int, default=5, help="拉前 N 个会话 (默认 5)")
     fr.add_argument("--out", help="输出到文件 (默认 stdout)")
     fr.set_defaults(func=cmd_fetch_recent)
+
+    ap = sp.add_parser("api", help="通用接口探测：sycm-cli api <path> --param k=v ...")
+    ap.add_argument("path", help='接口路径，如 "/cc/item/isAuth.json" 或 "ww/consultation/detail/list"')
+    ap.add_argument("--param", "-p", action="append", help="附加参数 key=value，可重复")
+    ap.add_argument("--referer", help="自定义 Referer 头")
+    ap.set_defaults(func=cmd_api)
+
+    # 命名子命令：每个高频页面一个
+    for name, preset in LIST_PRESETS.items():
+        sub = sp.add_parser(name, help=preset['desc'])
+        sub.add_argument("--date", default=yesterday, help=f"YYYY-MM-DD (默认昨天)")
+        sub.add_argument("--end-date", help="结束日期 (默认 = --date，做日维度查询)")
+        sub.add_argument("--limit", type=int, default=10, help="拉多少条 (默认 10)")
+        sub.add_argument("--page", type=int, default=1)
+        sub.add_argument("--raw", action="store_true", help="输出原始 JSON")
+        sub.add_argument("--out", help="输出到文件")
+        sub.set_defaults(func=cmd_preset_list, preset_name=name)
 
     return p
 

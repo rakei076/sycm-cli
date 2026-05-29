@@ -42,12 +42,54 @@ uv run --with browser-cookie3 --with curl-cffi python sycm_cli.py fetch-recent -
 
 ## 子命令
 
+### 旺旺咨询接待（含完整对话）
+
 | 子命令 | 用途 |
 |---|---|
 | `doctor` | 检查 cookie 能否读到 / 登录态是否有效 |
 | `list --date YYYY-MM-DD [--page N --size N]` | 拉某日的咨询会话列表（不含消息内容） |
 | `detail <dataId>` | 拉单个会话的全部消息（自动翻页） |
 | `fetch-recent --date YYYY-MM-DD --limit N [--out file]` | **主力**：列表 + 全部详情，给 AI 一行命令即可拿全数据 |
+
+### 高频日维度列表页面（v0.2+）
+
+每个子命令都接受 `--date YYYY-MM-DD --limit N --raw --out file`：
+
+| 子命令 | 对应 sycm 页面 | 字段 |
+|---|---|---|
+| `reception-list` | 服务/接待明细 | 开始/结束时间、买家、客服、是否回复 |
+| `evaluation-list` | 服务/售后评价 (邀评明细) | 接待时间、邀评时间、买家、客服、来源 |
+| `sale-shop-list` | 商品/销售分析 | 商品 ID/标题、店铺销售额、客服销售额、静默销售额 |
+| `sale-item-list` | 交易/订单明细 | 订单时间、订单金额、买家、客服、是否静默 |
+| `sale-cs-list` | 客服销售明细（旺旺销售）| 订单时间、买家、客服 |
+| `inquiry-loss-list` | 服务/询单流失 | 开始/结束时间、买家、客服 |
+| `slow-rsps-list` | 服务/慢响应 | 日期、开始/结束时间、买家、客服 |
+
+示例：
+```bash
+sycm-cli sale-shop-list --date 2026-05-27 --limit 10
+sycm-cli evaluation-list --date 2026-05-27 --limit 20 --out eval.json
+sycm-cli reception-list --date 2026-05-27 --raw   # 输出原始 JSON
+```
+
+### 通用接口探测（高级）
+
+```bash
+sycm-cli api <path> --param key=val --param key2=val2
+```
+
+用来探索还没封装为子命令的接口。例如：
+```bash
+sycm-cli api ww/consultation/detail/list \
+  -p startDate=20260527 -p endDate=20260527 -p dateType=day \
+  -p dateRange=day -p orderBy=startTime -p pageNo=1 -p pageSize=10
+```
+
+## 安全护栏的环境变量
+
+| 变量 | 作用 |
+|---|---|
+| `SYCM_BYPASS_CURFEW=1` | 强制跑（绕过 1:00–6:00 夜禁），仅自己调试用 |
 
 ## 输出 schema
 
