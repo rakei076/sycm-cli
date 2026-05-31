@@ -1,0 +1,24 @@
+# 运行产物（含真实店铺数据，永不提交）
+out-*.json
+*.chats.json
+scout-output/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# macOS
+.DS_Store
+._*
+
+# Editors
+.vscode/
+.idea/
+
+# Secrets
+.env
+.env.*
+*.key
