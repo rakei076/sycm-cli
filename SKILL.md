@@ -1,8 +1,8 @@
 ---
 name: sycm-cli
-description: 生意参谋（sycm.taobao.com）"旺旺咨询明细"全自动抓取 CLI。给 AI 代理一行命令拉取淘宝店铺的客服聊天记录，用于客服分析、质检、回访话术挖掘。触发场景：用户提到"生意参谋"、"sycm"、"旺旺咨询明细"、"客服聊天记录"、"接待明细"、"客服分析"、"拉聊天数据"。
+description: 生意参谋（sycm.taobao.com）店铺数据抓取 + Excel 导出 CLI。覆盖客服聊天 / 接待 / 评价 / 销售 / 退款 / 询单流失等 7 类核心数据，支持一行命令导出 Excel 到本地。触发场景：用户提到"生意参谋"、"sycm"、"旺旺咨询明细"、"客服聊天记录"、"接待明细"、"客服分析"、"商品销售 Excel"、"导出 Excel"、"下载店铺数据"、"评价数据下载"、"销售明细 Excel"、"邀评数据"等。
 author: rakel
-version: "0.1.0"
+version: "0.3.0"
 tags:
   - taobao
   - sycm
@@ -71,6 +71,41 @@ sycm-cli sale-shop-list --date 2026-05-27 --limit 10
 sycm-cli evaluation-list --date 2026-05-27 --limit 20 --out eval.json
 sycm-cli reception-list --date 2026-05-27 --raw   # 输出原始 JSON
 ```
+
+### Excel 一键下载（v0.3+）—— 商品数据 / 评价 / 销售等导出
+
+任何上面的 list preset 都能用 `excel` 子命令**一行下载 Excel 文件**到本地（默认 `~/Downloads/sycm-exports/`）。
+内部走 sycm 自带的"申请导出 → 排队生成 → 拿 OSS 临时链接 → 自动下"四步，全自动。
+
+```bash
+# 下昨天的商品销售 Excel (最高频用法)
+sycm-cli excel sale-shop-list
+
+# 下指定日期范围 + 指定输出位置
+sycm-cli excel evaluation-list --date 2026-05-27 --end-date 2026-05-29 --out /tmp/eval.xlsx
+
+# 下旺旺接待对话明细
+sycm-cli excel reception-list --date 2026-05-27
+
+# 看最近的导出任务列表（含失败/排队中的）
+sycm-cli excel-tasks
+```
+
+支持导出的 preset：`reception-list / evaluation-list / sale-shop-list / sale-item-list / sale-cs-list / inquiry-loss-list / slow-rsps-list`
+
+**典型输出**：
+```
+[1/4] 触发 [店铺商品销售排行 (商品/销售分析)] 导出 (2026-05-27 ~ 2026-05-27)...
+       任务 ID: 15412429
+[2/4] 等服务端生成 Excel（最多 60 秒）...
+       完成。194 条记录。
+[3/4] 取 OSS 下载链接...
+[4/4] 下载到 ~/Downloads/sycm-exports/店铺绩效-专项分析-商品销售分析_20260527_20260527_全部.xlsx ...
+
+✅ 完成: 17.7 KB, 194 条记录
+```
+
+OSS 临时链接 1 小时有效；过期需重新跑命令。
 
 ### 通用接口探测（高级）
 

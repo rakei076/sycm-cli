@@ -147,6 +147,7 @@ LIST_PRESETS: dict[str, dict[str, Any]] = {
     "reception-list": {
         "path": "ww/consultation/detail/list",
         "orderBy": "startTime",
+        "bizCode": "receptionDetail-wwConsultation",
         "referer": "https://sycm.taobao.com/qos/service/frame/performance/detail/new",
         "desc": "旺旺咨询接待明细 (服务/接待明细)",
         "show": ["startTime", "endTime", "buyerNick", "psnNickName", "isUnReply"],
@@ -154,6 +155,7 @@ LIST_PRESETS: dict[str, dict[str, Any]] = {
     "evaluation-list": {
         "path": "evaluation/detail/list",
         "orderBy": "servTime",
+        "bizCode": "qualityDetail-receptionEvaluation",
         "referer": "https://sycm.taobao.com/qos/service/after_sale/estimate",
         "desc": "邀评/评价明细 (服务/售后评价)",
         "show": ["servTime", "sendTime", "buyerNick", "psnNickName", "source", "lstEvaScore"],
@@ -161,6 +163,7 @@ LIST_PRESETS: dict[str, dict[str, Any]] = {
     "sale-shop-list": {
         "path": "shop/sale/analysis/list",
         "orderBy": "itemId",
+        "bizCode": "saleDetail-shopSale",
         "referer": "https://sycm.taobao.com/fa/frame/trade_overview",
         "desc": "店铺商品销售排行 (商品/销售分析)",
         "show": ["itemId", "itemTitle", "shopPayAmt1d", "shopPayItmCnt1d", "servPayAmt1d", "silentPayAmt1d"],
@@ -168,6 +171,7 @@ LIST_PRESETS: dict[str, dict[str, Any]] = {
     "sale-item-list": {
         "path": "item/sale/detail/list",
         "orderBy": "startTime",
+        "bizCode": "saleDetail-itemSale",
         "referer": "https://sycm.taobao.com/qos/service/frame/performance/detail/new",
         "desc": "订单销售明细 (交易/订单明细)",
         "show": ["createTime", "createAmt", "buyerNick", "accountNick", "isSlientFlow"],
@@ -175,6 +179,7 @@ LIST_PRESETS: dict[str, dict[str, Any]] = {
     "sale-cs-list": {
         "path": "ww/sale/detail/list",
         "orderBy": "startTime",
+        "bizCode": "saleDetail-wwSale",
         "referer": "https://sycm.taobao.com/qos/service/frame/performance/detail/new",
         "desc": "客服销售明细 (旺旺销售)",
         "show": ["createTime", "buyerNick", "accountNick"],
@@ -182,6 +187,7 @@ LIST_PRESETS: dict[str, dict[str, Any]] = {
     "inquiry-loss-list": {
         "path": "inquiry/loss/list",
         "orderBy": "startTime",
+        "bizCode": "lossDetail-inquiryLoss",
         "referer": "https://sycm.taobao.com/qos/service/frame/performance/detail/new",
         "desc": "询单流失明细 (服务/咨询分析)",
         "show": ["startTime", "endTime", "buyerNick", "psnNickName"],
@@ -189,6 +195,7 @@ LIST_PRESETS: dict[str, dict[str, Any]] = {
     "slow-rsps-list": {
         "path": "slow/rsps/detail/list",
         "orderBy": "startTime",
+        "bizCode": "slow-rsps-detail-mxymx",
         "referer": "https://sycm.taobao.com/qos/service/frame/performance/detail/new",
         "desc": "慢响应明细 (服务/慢响应)",
         "show": ["dateId", "startTime", "endTime", "buyerNick", "psnNickName"],
@@ -278,6 +285,138 @@ def fetch_chat_detail_all_pages(
         all_rows.extend(rows)
         _sleep_humanlike()
     return all_rows
+
+
+# ---------- Excel 导出（async-excel + 轮询 + 下载，三步合一）----------
+
+def trigger_excel_export(preset_name: str, *, start_date: str, end_date: str,
+                          cookies: dict[str, str]) -> int:
+    """触发某 preset 的 async-excel 导出，返回 task ID。"""
+    preset = LIST_PRESETS[preset_name]
+    biz_code = preset.get("bizCode")
+    if not biz_code:
+        raise RuntimeError(f"preset {preset_name} 未配置 bizCode，无法导出")
+    excel_path = preset["path"].replace("/list", "/async-excel")
+    sd = start_date.replace("-", "")
+    ed = end_date.replace("-", "")
+    params = {
+        "_": str(int(time.time() * 1000)),
+        "token": cookies.get("_tb_token_", ""),
+        "startDate": sd,
+        "endDate": ed,
+        "dateType": "day",
+        "dateRange": "day",
+        "orderBy": preset["orderBy"],
+        "bizCode": biz_code,
+    }
+    resp = _api_get(excel_path, params, cookies, referer=preset.get("referer"))
+    if not resp.get("success"):
+        raise RuntimeError(f"导出触发失败: {resp.get('message') or resp}")
+    return int(resp.get("data"))
+
+
+def poll_excel_task(task_id: int, biz_code: str, *, cookies: dict[str, str],
+                     max_wait_sec: int = 60, poll_interval: int = 3) -> dict[str, Any]:
+    """轮询任务列表直到指定 task_id 完成 (status='ok' / process=100)。"""
+    deadline = time.time() + max_wait_sec
+    while time.time() < deadline:
+        params = {
+            "_": str(int(time.time() * 1000)),
+            "token": cookies.get("_tb_token_", ""),
+            "bizCode": biz_code,
+        }
+        resp = _api_get("file/task-list.json", params, cookies)
+        tasks = (resp.get("data") or {}).get("result") or []
+        match = next((t for t in tasks if int(t.get("id", -1)) == task_id), None)
+        if match and match.get("status") == "ok" and (match.get("process") or 0) >= 100:
+            return match
+        time.sleep(poll_interval)
+    raise TimeoutError(f"等任务 #{task_id} 超时 ({max_wait_sec}s)")
+
+
+def get_excel_download_url(task_id: int, biz_code: str, *, cookies: dict[str, str]) -> str:
+    """拿 OSS 临时下载 URL。"""
+    params = {
+        "_": str(int(time.time() * 1000)),
+        "token": cookies.get("_tb_token_", ""),
+        "id": str(task_id),
+        "bizCode": biz_code,
+    }
+    resp = _api_get("file/url", params, cookies)
+    if not resp.get("success"):
+        raise RuntimeError(f"拿下载 URL 失败: {resp.get('message') or resp}")
+    return resp["data"]
+
+
+def cmd_excel(args: argparse.Namespace) -> None:
+    """一行搞定：触发导出 → 轮询 → 下载到本地。"""
+    cookies = load_taobao_cookies()
+    preset = LIST_PRESETS[args.preset_name]
+    biz_code = preset.get("bizCode")
+    if not biz_code:
+        print(f"⚠️  {args.preset_name} 还没配置 bizCode，无法导出 Excel", file=sys.stderr)
+        sys.exit(1)
+    end = args.end_date or args.date
+
+    print(f"[1/4] 触发 [{preset['desc']}] 导出 ({args.date} ~ {end})...", file=sys.stderr)
+    task_id = trigger_excel_export(args.preset_name, start_date=args.date,
+                                    end_date=end, cookies=cookies)
+    print(f"       任务 ID: {task_id}", file=sys.stderr)
+
+    print(f"[2/4] 等服务端生成 Excel（最多 {args.wait} 秒）...", file=sys.stderr)
+    task = poll_excel_task(task_id, biz_code, cookies=cookies, max_wait_sec=args.wait)
+    record_num = task.get("recordNum", "?")
+    server_filename = task.get("fileName", "?")
+    print(f"       完成。{record_num} 条记录。", file=sys.stderr)
+
+    print(f"[3/4] 取 OSS 下载链接...", file=sys.stderr)
+    url = get_excel_download_url(task_id, biz_code, cookies=cookies)
+
+    # 默认输出路径
+    if args.out:
+        out_path = Path(args.out)
+    else:
+        Path.home().joinpath("Downloads/sycm-exports").mkdir(parents=True, exist_ok=True)
+        # 用 server 文件名最后一段（去掉路径）
+        suggested = server_filename.split("/")[-1] if "/" in server_filename else f"{args.preset_name}_{args.date}.xlsx"
+        out_path = Path.home() / "Downloads" / "sycm-exports" / suggested
+
+    print(f"[4/4] 下载到 {out_path} ...", file=sys.stderr)
+    import urllib.request
+    urllib.request.urlretrieve(url, out_path)
+    size_kb = out_path.stat().st_size / 1024
+    print(f"\n✅ 完成: {out_path} ({size_kb:.1f} KB, {record_num} 条记录)")
+
+
+def cmd_excel_tasks(args: argparse.Namespace) -> None:
+    """列出所有 preset 名下的导出任务（最近的）。"""
+    cookies = load_taobao_cookies()
+    for name, preset in LIST_PRESETS.items():
+        biz = preset.get("bizCode")
+        if not biz:
+            continue
+        try:
+            params = {
+                "_": str(int(time.time() * 1000)),
+                "token": cookies.get("_tb_token_", ""),
+                "bizCode": biz,
+            }
+            resp = _api_get("file/task-list.json", params, cookies)
+            tasks = (resp.get("data") or {}).get("result") or []
+            if not tasks:
+                continue
+            print(f"\n## {name} (bizCode={biz})")
+            for t in tasks[:5]:
+                status = t.get("status", "?")
+                proc = t.get("process", 0)
+                rec = t.get("recordNum", "?")
+                ts = t.get("gmtCreate", 0)
+                from datetime import datetime
+                ts_str = datetime.fromtimestamp(ts / 1000).strftime("%Y-%m-%d %H:%M") if ts else "?"
+                print(f"  [{t.get('id')}] {ts_str}  {status} {proc}%  {rec} 条")
+        except Exception as e:
+            print(f"## {name}: 查询失败 - {e}", file=sys.stderr)
+        time.sleep(1)
 
 
 # ---------- 命令 ----------
@@ -489,6 +628,20 @@ def build_parser() -> argparse.ArgumentParser:
         sub.add_argument("--raw", action="store_true", help="输出原始 JSON")
         sub.add_argument("--out", help="输出到文件")
         sub.set_defaults(func=cmd_preset_list, preset_name=name)
+
+    # Excel 导出（一行搞定：触发 → 等 → 下载）
+    preset_choices = sorted(LIST_PRESETS.keys())
+    ex = sp.add_parser("excel", help="导出 + 下载某个数据为 Excel（一条命令搞定）")
+    ex.add_argument("preset_name", choices=preset_choices,
+                    help=f"要导哪份数据：{', '.join(preset_choices)}")
+    ex.add_argument("--date", default=yesterday, help=f"开始日期 (默认昨天 {yesterday})")
+    ex.add_argument("--end-date", help="结束日期 (默认 = --date)")
+    ex.add_argument("--out", help="输出文件路径 (默认 ~/Downloads/sycm-exports/<sycm-原文件名>.xlsx)")
+    ex.add_argument("--wait", type=int, default=60, help="最多等几秒服务端生成 Excel (默认 60)")
+    ex.set_defaults(func=cmd_excel)
+
+    et = sp.add_parser("excel-tasks", help="列出最近的导出任务（按 preset 分组）")
+    et.set_defaults(func=cmd_excel_tasks)
 
     return p
 
