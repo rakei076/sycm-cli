@@ -1,8 +1,8 @@
 ---
 name: sycm-cli
-description: 生意参谋（sycm.taobao.com）店铺数据抓取 + Excel 导出 CLI。覆盖客服聊天 / 接待 / 评价 / 销售 / 退款 / 询单流失等 7 类核心数据，支持一行命令导出 Excel 到本地。触发场景：用户提到"生意参谋"、"sycm"、"旺旺咨询明细"、"客服聊天记录"、"接待明细"、"客服分析"、"商品销售 Excel"、"导出 Excel"、"下载店铺数据"、"评价数据下载"、"销售明细 Excel"、"邀评数据"等。
+description: 生意参谋（sycm.taobao.com）店铺数据抓取 + Excel 导出 CLI。覆盖客服聊天 / 接待 / 评价 / 销售 / 退款 / 询单流失 / 商品排行 / 商品 360 / 品类 360 / 新品追踪等核心数据，支持一行命令导出 Excel 到本地。触发场景：用户提到"生意参谋"、"sycm"、"旺旺咨询明细"、"客服聊天记录"、"接待明细"、"客服分析"、"商品销售 Excel"、"导出 Excel"、"下载店铺数据"、"评价数据下载"、"销售明细 Excel"、"邀评数据"、"商品排行"、"商品 360"、"品类 360"、"新品追踪"等。
 author: rakel
-version: "0.3.0"
+version: "0.4.0"
 tags:
   - taobao
   - sycm
@@ -38,7 +38,7 @@ uv run --with browser-cookie3 --with curl-cffi python sycm_cli.py fetch-recent -
 2. `curl_cffi` 伪 TLS 指纹（`impersonate='chrome120'`）直调 sycm API
 3. **不接管浏览器、不开 profile、不需要 CDP、不用 Playwright/Selenium**
 
-风控视角下和正常人工浏览没有区别。
+请求形态尽量贴近正常人工浏览，但仍然必须控制频率并遵守下面的安全护栏。
 
 ## 子命令
 
@@ -71,6 +71,36 @@ sycm-cli sale-shop-list --date YYYY-MM-DD --limit 10
 sycm-cli evaluation-list --date YYYY-MM-DD --limit 20 --out eval.json
 sycm-cli reception-list --date YYYY-MM-DD --raw   # 输出原始 JSON
 ```
+
+### 商品大类 (v0.4+) —— 商品排行 / 商品 360 / 品类 360 / 新品追踪
+
+走的是 sycm 商品板块的**新接口（cc/* 系列，cc-v2 风格）**，与上面的旧 csp 接口参数完全不同：
+- 日期参数：`dateRange="YYYY-MM-DD|YYYY-MM-DD"` + `dateType=day|recent7|recent15|recent30`
+- response 里字段值常是 `{value, cycleCrc, syncCrc}` 嵌套对象（CLI 已自动提取 `.value` 展示）
+
+| 子命令 | 对应 sycm 页面 | 关键字段 | 备注 |
+|---|---|---|---|
+| `item-list` | 商品/商品排行 (`/cc/item_rank`) 或 商品 360 (`/cc/item_archives`) | 商品标题、payAmt、itmUv、payRate、itemLevel | 两个页面共用同一个接口 `/cc/item/portal/itemList.json` |
+| `cate-list` | 商品/品类 360 (`/cc/new_cate_archives`) | cateName、payAmt、itmUv、payRate | 返回的是当日全行业品类数据（含 children 树）|
+| `new-product-list` | 商品/新品追踪 → 列表 (`/cc/new_item_analysis`) | 商品、publishNewTime、payAmtNew、shopUvNew | 接 `--cate-id` 限定类目 |
+| `new-product-overview` | 商品/新品追踪 → 顶部汇总卡 | newItmCnt、shopUvNew、payAmtNew、addCartCntNew | 不是 list，返回汇总对象 |
+| `new-product-trend` | 商品/新品追踪 → 趋势图 | self/industry 两组时序数据 | 建议加 `--raw` 拿全 |
+
+示例：
+```bash
+# 看昨天销售前 10 商品 (商品排行)
+sycm-cli item-list --date YYYY-MM-DD --limit 10
+
+# 看品类 360（全行业品类销售）
+sycm-cli cate-list --date YYYY-MM-DD --limit 5
+
+# 新品追踪 (3 个子接口)
+sycm-cli new-product-overview --date YYYY-MM-DD           # 总览
+sycm-cli new-product-list --date YYYY-MM-DD --limit 10    # 列表
+sycm-cli new-product-trend --date YYYY-MM-DD --raw        # 趋势
+```
+
+**字段值是嵌套对象，加 `--raw` 才能拿到对比指标**（cycleCrc=环比、syncCrc=同比）。摘要模式只显示 `.value`。
 
 ### Excel 一键下载（v0.3+）—— 商品数据 / 评价 / 销售等导出
 
@@ -125,6 +155,7 @@ sycm-cli api ww/consultation/detail/list \
 | 变量 | 作用 |
 |---|---|
 | `SYCM_BYPASS_CURFEW=1` | 强制跑（绕过 1:00–6:00 夜禁），仅自己调试用 |
+| `SYCM_REQUEST_LIMIT=N` | 可选硬上限：达到 N 次请求停止（默认无；只是兜底防脚本跑飞）|
 
 ## 输出 schema
 
@@ -162,17 +193,23 @@ sycm-cli api ww/consultation/detail/list \
 }
 ```
 
-判断发言方：`'<店铺名>' in userNickFrom` → 客服；否则 → 买家。
+判断发言方：优先用列表里的客服昵称匹配 `userNickFrom`；无法匹配时再按买家侧处理。
 
-## 安全护栏（已写进 CLI，硬约束）
+## 安全护栏
 
+CLI 内置的护栏分两层：
+
+**硬约束**（确认是风险信号才停，不会因日常使用误触）：
+- 检测响应含 `滑块` / `验证码` / `操作过于频繁` / `请重新登录` → 立即终止，抛 `RiskTriggered` 退出码 2
+- 连续 2 次 HTTP 失败 → 立即终止（连续失败大概率是登录态过期或网络挂了）
+- 夜间 1:00 – 6:00 默认禁跑（行为风控敏感时段）— 调试可加 `SYCM_BYPASS_CURFEW=1`
+
+**软建议**（不停止，只在 stderr 提示）：
 - 请求间隔随机 1.8 ~ 3.5 秒（接近人工）
-- 单次运行最多 80 个请求，超过自动停止
-- 连续 2 次失败立即停止
-- 检测响应含 `滑块` / `验证码` / `操作过于频繁` / `请重新登录` 立即终止
-- 夜间 1:00 – 6:00 禁跑（行为风控敏感时段）
+- 累计 200 次请求时打一次提醒（风控按"短时高频"判定，不按"总量"，所以 200 不是上限只是个提示点）
+- 如需硬性兜底（防脚本跑飞），设 `SYCM_REQUEST_LIMIT=N`
 
-**如果触发风控**，CLI 直接抛 `RiskTriggered` 异常退出码 2，**永远不重试**。重试只会让风控升级。
+**触发 `RiskTriggered` 时绝对不要重试**。重试只会让风控升级，等 24 小时再用。
 
 ## 反编译笔记（接口情报）
 

@@ -86,26 +86,54 @@ git clone https://github.com/rakei076/sycm-cli.git ~/.claude/skills/sycm-cli
 
 ## 子命令
 
+### 客服 / 服务类（旧 csp 接口）
 | 子命令 | 用途 |
 |---|---|
 | `doctor` | 检查 cookie / 登录态 |
 | `list --date YYYY-MM-DD` | 列出某日的咨询会话（不含消息正文） |
 | `detail <dataId>` | 拉单个会话的全部消息（自动翻页） |
 | `fetch-recent --date YYYY-MM-DD --limit N` | **主力**：列表 + 全部详情，给 AI 用 |
+| `reception-list` / `evaluation-list` / `inquiry-loss-list` / `slow-rsps-list` / `sale-cs-list` | 客服与服务高频 API |
+| `sale-shop-list` / `sale-item-list` | 交易与商品销售 API |
+| `excel <preset>` | 一行命令导出对应数据为 Excel（自动触发→排队→下载）|
 
-详细 schema 见 [SKILL.md](SKILL.md)。
+### 商品大类（v0.4+，新 cc-v2 接口）
+| 子命令 | 对应 sycm 页面 |
+|---|---|
+| `item-list` | 商品/商品排行 + 商品 360（共用接口）|
+| `cate-list` | 商品/品类 360 |
+| `new-product-list` | 商品/新品追踪 → 列表 |
+| `new-product-overview` | 商品/新品追踪 → 顶部汇总卡 |
+| `new-product-trend` | 商品/新品追踪 → 趋势图 |
+
+### 通用工具
+| 子命令 | 用途 |
+|---|---|
+| `api <path> -p k=v` | 通用 API 探测器，调任何 sycm 接口 |
+
+详细 schema、字段定义、参数风格区别（sycm-v1 vs cc-v2）见 [SKILL.md](SKILL.md)。
 
 ## 安全护栏
 
-| 规则 | 默认值 |
+CLI 内置的护栏分两层：
+
+**硬约束**（确认是风险信号才停）：
+| 规则 | 行为 |
+|---|---|
+| 风控关键词检测 | 响应含 `滑块/验证码/操作过于频繁/请重新登录` → 立即终止，退出码 2 |
+| 连续失败 | 连续 2 次 HTTP 失败 → 立即终止 |
+| 夜禁时段 | 01:00 – 06:00 默认禁跑（调试设 `SYCM_BYPASS_CURFEW=1`）|
+
+**软建议**（不停止，只 stderr 提示）：
+| 规则 | 默认 |
 |---|---|
 | 请求间隔（随机） | 1.8 – 3.5 秒 |
-| 单次运行最大请求数 | 80 |
-| 连续失败次数 | 2 次则停 |
-| 风控关键词检测 | 滑块/验证码/操作过于频繁/请重新登录 |
-| 夜禁时段 | 01:00 – 06:00 |
+| 累计请求软警告点 | 200 次（只是提示点，不是上限）|
+| 可选硬上限 | 设 `SYCM_REQUEST_LIMIT=N` 启用（默认无上限，防脚本跑飞用）|
 
-触发任何风控信号，CLI 抛 `RiskTriggered` 退出码 2，**绝不重试**。
+**风控按"短时高频"判定，不按"总量"**，所以日常批量拉数据完全没问题。
+
+触发 `RiskTriggered` 时**绝对不要重试** —— 重试会让风控升级，等 24 小时再用。
 
 ## 接口情报
 
