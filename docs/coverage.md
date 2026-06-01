@@ -1,6 +1,6 @@
 # sycm-cli Coverage Plan
 
-This private working plan tracks what the CLI should cover before changes are reviewed for the public repository.
+This plan tracks what the CLI should cover as new API modules are added.
 
 ## Execution Policy
 
@@ -65,4 +65,4 @@ The local scout output shows roughly 260 leaf pages across 20 top-level menu gro
 
 ## Release Rule
 
-Push implementation work to `private`. The public `origin` is only for reviewed, sanitized releases.
+Review and sanitize implementation work before publishing it to the public `origin`.

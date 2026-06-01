@@ -25,7 +25,7 @@ tags:
 
 ```bash
 cd ~/claudecodeworkspace/sycm-cli  # 或本 skill 目录
-uv run --with browser-cookie3 --with curl-cffi python sycm_cli.py fetch-recent --date 2026-05-27 --limit 10 --out chats.json
+uv run --with browser-cookie3 --with curl-cffi python sycm_cli.py fetch-recent --date YYYY-MM-DD --limit 10 --out chats.json
 ```
 
 输出 `chats.json` 包含某日前 N 个会话的元数据 + 全部消息内容，可直接喂给 LLM 做客服分析。
@@ -38,7 +38,7 @@ uv run --with browser-cookie3 --with curl-cffi python sycm_cli.py fetch-recent -
 2. `curl_cffi` 伪 TLS 指纹（`impersonate='chrome120'`）直调 sycm API
 3. **不接管浏览器、不开 profile、不需要 CDP、不用 Playwright/Selenium**
 
-风控视角下和正常人工浏览没有区别。
+请求形态尽量贴近正常人工浏览，但仍然必须控制频率并遵守下面的安全护栏。
 
 ## 子命令
 
@@ -67,9 +67,9 @@ uv run --with browser-cookie3 --with curl-cffi python sycm_cli.py fetch-recent -
 
 示例：
 ```bash
-sycm-cli sale-shop-list --date 2026-05-27 --limit 10
-sycm-cli evaluation-list --date 2026-05-27 --limit 20 --out eval.json
-sycm-cli reception-list --date 2026-05-27 --raw   # 输出原始 JSON
+sycm-cli sale-shop-list --date YYYY-MM-DD --limit 10
+sycm-cli evaluation-list --date YYYY-MM-DD --limit 20 --out eval.json
+sycm-cli reception-list --date YYYY-MM-DD --raw   # 输出原始 JSON
 ```
 
 ### 商品大类 (v0.4+) —— 商品排行 / 商品 360 / 品类 360 / 新品追踪
@@ -89,15 +89,15 @@ sycm-cli reception-list --date 2026-05-27 --raw   # 输出原始 JSON
 示例：
 ```bash
 # 看昨天销售前 10 商品 (商品排行)
-sycm-cli item-list --date 2026-05-31 --limit 10
+sycm-cli item-list --date YYYY-MM-DD --limit 10
 
 # 看品类 360（全行业品类销售）
-sycm-cli cate-list --date 2026-05-31 --limit 5
+sycm-cli cate-list --date YYYY-MM-DD --limit 5
 
 # 新品追踪 (3 个子接口)
-sycm-cli new-product-overview --date 2026-05-31           # 总览
-sycm-cli new-product-list --date 2026-05-31 --limit 10    # 列表
-sycm-cli new-product-trend --date 2026-05-31 --raw        # 趋势
+sycm-cli new-product-overview --date YYYY-MM-DD           # 总览
+sycm-cli new-product-list --date YYYY-MM-DD --limit 10    # 列表
+sycm-cli new-product-trend --date YYYY-MM-DD --raw        # 趋势
 ```
 
 **字段值是嵌套对象，加 `--raw` 才能拿到对比指标**（cycleCrc=环比、syncCrc=同比）。摘要模式只显示 `.value`。
@@ -112,10 +112,10 @@ sycm-cli new-product-trend --date 2026-05-31 --raw        # 趋势
 sycm-cli excel sale-shop-list
 
 # 下指定日期范围 + 指定输出位置
-sycm-cli excel evaluation-list --date 2026-05-27 --end-date 2026-05-29 --out /tmp/eval.xlsx
+sycm-cli excel evaluation-list --date YYYY-MM-DD --end-date YYYY-MM-DD --out /tmp/eval.xlsx
 
 # 下旺旺接待对话明细
-sycm-cli excel reception-list --date 2026-05-27
+sycm-cli excel reception-list --date YYYY-MM-DD
 
 # 看最近的导出任务列表（含失败/排队中的）
 sycm-cli excel-tasks
@@ -125,14 +125,14 @@ sycm-cli excel-tasks
 
 **典型输出**：
 ```
-[1/4] 触发 [店铺商品销售排行 (商品/销售分析)] 导出 (2026-05-27 ~ 2026-05-27)...
-       任务 ID: 15412429
+[1/4] 触发 [店铺商品销售排行 (商品/销售分析)] 导出 (YYYY-MM-DD ~ YYYY-MM-DD)...
+       任务 ID: 123456
 [2/4] 等服务端生成 Excel（最多 60 秒）...
-       完成。194 条记录。
+       完成。12 条记录。
 [3/4] 取 OSS 下载链接...
-[4/4] 下载到 ~/Downloads/sycm-exports/店铺绩效-专项分析-商品销售分析_20260527_20260527_全部.xlsx ...
+[4/4] 下载到 ~/Downloads/sycm-exports/店铺绩效-专项分析-商品销售分析_YYYYMMDD_YYYYMMDD_全部.xlsx ...
 
-✅ 完成: 17.7 KB, 194 条记录
+✅ 完成: 12.3 KB, 12 条记录
 ```
 
 OSS 临时链接 1 小时有效；过期需重新跑命令。
@@ -146,7 +146,7 @@ sycm-cli api <path> --param key=val --param key2=val2
 用来探索还没封装为子命令的接口。例如：
 ```bash
 sycm-cli api ww/consultation/detail/list \
-  -p startDate=20260527 -p endDate=20260527 -p dateType=day \
+  -p startDate=YYYYMMDD -p endDate=YYYYMMDD -p dateType=day \
   -p dateRange=day -p orderBy=startTime -p pageNo=1 -p pageSize=10
 ```
 
@@ -163,25 +163,25 @@ sycm-cli api ww/consultation/detail/list \
 
 ```json
 {
-  "fetchedAt": "2026-05-28T19:05:00",
-  "date": "2026-05-27",
-  "totalOnServer": 149,
+  "fetchedAt": "YYYY-MM-DDTHH:MM:SS",
+  "date": "YYYY-MM-DD",
+  "totalOnServer": 12,
   "fetched": 10,
   "sessions": [
     {
       "meta": {
-        "dataId": "20260527_<sellerId>_<accountId>_<buyerId>",
+        "dataId": "YYYYMMDD_<sellerId>_<accountId>_<buyerId>",
         "buyerNick": "x**",
         "psnNickName": "<店铺>:<客服名>",
         "accountNick": "<客服名>",
-        "startTime": "2026-05-27 23:16:41",
-        "endTime": "2026-05-27 23:16:59",
+        "startTime": "YYYY-MM-DD HH:MM:SS",
+        "endTime": "YYYY-MM-DD HH:MM:SS",
         "isSellerFst": "买家发起" | "客服主动跟进",
         "isUnReply": "已回复" | "未回复"
       },
       "messages": [
         {
-          "gmtCreated": "2026-05-27 23:16:41.000",
+          "gmtCreated": "YYYY-MM-DD HH:MM:SS.000",
           "userNickFrom": "<店铺>:<客服>" | "<买家旺旺>",
           "userNickTo": "<对方>",
           "msg": "聊天文本内容",
@@ -193,7 +193,7 @@ sycm-cli api ww/consultation/detail/list \
 }
 ```
 
-判断发言方：`'旗舰店' in userNickFrom` → 客服；否则 → 买家。
+判断发言方：优先用列表里的客服昵称匹配 `userNickFrom`；无法匹配时再按买家侧处理。
 
 ## 安全护栏
 

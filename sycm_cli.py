@@ -2,7 +2,7 @@
 """sycm-cli — 生意参谋"旺旺咨询明细"全自动抓取 CLI
 
 参考 twitter-cli 的纯本地认证模型：
-- browser_cookie3 从 Chrome 直接读 taobao cookies（无需登录）
+- browser_cookie3 从已登录的 Chrome 直接读 taobao cookies（无需手动输入账号密码）
 - curl_cffi 伪 TLS 指纹直调 sycm API
 - 不开新 profile、不接管浏览器、不需要用户手动操作
 
@@ -561,11 +561,10 @@ def cmd_doctor(args: argparse.Namespace) -> None:
     try:
         cookies = load_taobao_cookies()
         print(f"✓ 读到 {len(cookies)} 个 taobao 域 cookie")
-        print(f"✓ _tb_token_ = {cookies['_tb_token_']}")
+        print("✓ _tb_token_ = <present>")
         for k in ("cna", "t", "_m_h5_tk", "thw"):
             if k in cookies:
-                v = cookies[k]
-                print(f"✓ {k} = {v[:20]}{'...' if len(v) > 20 else ''}")
+                print(f"✓ {k} = <present>")
     except Exception as e:
         print(f"✗ {e}")
         sys.exit(1)
@@ -731,7 +730,8 @@ def cmd_detail(args: argparse.Namespace) -> None:
     for r in rows:
         ts = r.get("gmtCreated", "")[11:19]
         speaker = r.get("userNickFrom", "?")
-        is_cs = "旗舰店" in speaker or speaker == rows[0].get("accountNick")
+        account_nick = rows[0].get("accountNick")
+        is_cs = speaker == account_nick or (account_nick and account_nick in speaker)
         arrow = "→" if is_cs else "←"
         msg = r.get("msg", "").replace("\n", " ")
         print(f"[{ts}] {arrow} {speaker}: {msg}")
