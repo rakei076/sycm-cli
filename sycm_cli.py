@@ -2,7 +2,7 @@
 """sycm-cli — 生意参谋"旺旺咨询明细"全自动抓取 CLI
 
 参考 twitter-cli 的纯本地认证模型：
-- browser_cookie3 从 Chrome 直接读 taobao cookies（无需登录）
+- browser_cookie3 从已登录的 Chrome 直接读 taobao cookies（无需手动输入账号密码）
 - curl_cffi 伪 TLS 指纹直调 sycm API
 - 不开新 profile、不接管浏览器、不需要用户手动操作
 
@@ -145,6 +145,9 @@ def _api_get(path: str, params: dict[str, Any], cookies: dict[str, str], referer
 
 LIST_PRESETS: dict[str, dict[str, Any]] = {
     "reception-list": {
+        "category": "service",
+        "priority": 1,
+        "status": "verified",
         "path": "ww/consultation/detail/list",
         "orderBy": "startTime",
         "bizCode": "receptionDetail-wwConsultation",
@@ -152,7 +155,43 @@ LIST_PRESETS: dict[str, dict[str, Any]] = {
         "desc": "旺旺咨询接待明细 (服务/接待明细)",
         "show": ["startTime", "endTime", "buyerNick", "psnNickName", "isUnReply"],
     },
+    "effective-reception-list": {
+        "category": "service",
+        "priority": 1,
+        "status": "live-ok-empty",
+        "path": "effective/Reception/detail/list",
+        "orderBy": "startTime",
+        "bizCode": "receptionDetail-effectiveReception",
+        "referer": "https://sycm.taobao.com/qos/service/frame/performance/detail/new",
+        "desc": "有效接待明细 (服务/接待明细)",
+        "show": ["startTime", "endTime", "buyerNick", "psnNickName", "isUnReply"],
+    },
+    "filtered-reception-list": {
+        "category": "service",
+        "priority": 1,
+        "status": "live-ok-empty",
+        "path": "reception/filtering/detail/list",
+        "orderBy": "startTime",
+        "bizCode": "receptionDetail-receptionFilter",
+        "referer": "https://sycm.taobao.com/qos/service/frame/performance/detail/new",
+        "desc": "接待过滤明细 (服务/接待明细)",
+        "show": ["startTime", "endTime", "buyerNick", "psnNickName", "realFilterType"],
+    },
+    "long-reception-list": {
+        "category": "service",
+        "priority": 1,
+        "status": "live-ok-empty",
+        "path": "long/rcpt/detail/list",
+        "orderBy": "startTime",
+        "bizCode": "long-rcpt-detail-cjdmx",
+        "referer": "https://sycm.taobao.com/qos/service/frame/performance/detail/new",
+        "desc": "长接待明细 (服务/接待明细)",
+        "show": ["startTime", "endTime", "buyerNick", "psnNickName", "rcptDuration"],
+    },
     "evaluation-list": {
+        "category": "service",
+        "priority": 1,
+        "status": "verified",
         "path": "evaluation/detail/list",
         "orderBy": "servTime",
         "bizCode": "qualityDetail-receptionEvaluation",
@@ -161,6 +200,9 @@ LIST_PRESETS: dict[str, dict[str, Any]] = {
         "show": ["servTime", "sendTime", "buyerNick", "psnNickName", "source", "lstEvaScore"],
     },
     "sale-shop-list": {
+        "category": "transaction",
+        "priority": 2,
+        "status": "verified",
         "path": "shop/sale/analysis/list",
         "orderBy": "itemId",
         "bizCode": "saleDetail-shopSale",
@@ -169,6 +211,9 @@ LIST_PRESETS: dict[str, dict[str, Any]] = {
         "show": ["itemId", "itemTitle", "shopPayAmt1d", "shopPayItmCnt1d", "servPayAmt1d", "silentPayAmt1d"],
     },
     "sale-item-list": {
+        "category": "transaction",
+        "priority": 2,
+        "status": "verified",
         "path": "item/sale/detail/list",
         "orderBy": "startTime",
         "bizCode": "saleDetail-itemSale",
@@ -177,6 +222,9 @@ LIST_PRESETS: dict[str, dict[str, Any]] = {
         "show": ["createTime", "createAmt", "buyerNick", "accountNick", "isSlientFlow"],
     },
     "sale-cs-list": {
+        "category": "service",
+        "priority": 1,
+        "status": "verified",
         "path": "ww/sale/detail/list",
         "orderBy": "startTime",
         "bizCode": "saleDetail-wwSale",
@@ -185,6 +233,9 @@ LIST_PRESETS: dict[str, dict[str, Any]] = {
         "show": ["createTime", "buyerNick", "accountNick"],
     },
     "inquiry-loss-list": {
+        "category": "service",
+        "priority": 1,
+        "status": "verified",
         "path": "inquiry/loss/list",
         "orderBy": "startTime",
         "bizCode": "lossDetail-inquiryLoss",
@@ -193,6 +244,9 @@ LIST_PRESETS: dict[str, dict[str, Any]] = {
         "show": ["startTime", "endTime", "buyerNick", "psnNickName"],
     },
     "slow-rsps-list": {
+        "category": "service",
+        "priority": 1,
+        "status": "verified",
         "path": "slow/rsps/detail/list",
         "orderBy": "startTime",
         "bizCode": "slow-rsps-detail-mxymx",
@@ -421,16 +475,29 @@ def cmd_excel_tasks(args: argparse.Namespace) -> None:
 
 # ---------- 命令 ----------
 
+def cmd_presets(args: argparse.Namespace) -> None:
+    rows = sorted(
+        LIST_PRESETS.items(),
+        key=lambda item: (item[1].get("priority", 99), item[1].get("category", ""), item[0]),
+    )
+    print("| preset | category | priority | status | endpoint |")
+    print("|---|---|---:|---|---|")
+    for name, preset in rows:
+        category = preset.get("category", "?")
+        priority = preset.get("priority", "?")
+        status = preset.get("status", "unknown")
+        print(f"| `{name}` | {category} | {priority} | {status} | `{preset['path']}` |")
+
+
 def cmd_doctor(args: argparse.Namespace) -> None:
     print("== sycm-cli doctor ==")
     try:
         cookies = load_taobao_cookies()
         print(f"✓ 读到 {len(cookies)} 个 taobao 域 cookie")
-        print(f"✓ _tb_token_ = {cookies['_tb_token_']}")
+        print("✓ _tb_token_ = <present>")
         for k in ("cna", "t", "_m_h5_tk", "thw"):
             if k in cookies:
-                v = cookies[k]
-                print(f"✓ {k} = {v[:20]}{'...' if len(v) > 20 else ''}")
+                print(f"✓ {k} = <present>")
     except Exception as e:
         print(f"✗ {e}")
         sys.exit(1)
@@ -590,6 +657,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     d = sp.add_parser("doctor", help="检查 cookie / 登录态")
     d.set_defaults(func=cmd_doctor)
+
+    ps = sp.add_parser("presets", help="列出已封装和候选 API preset")
+    ps.set_defaults(func=cmd_presets)
 
     today = date.today().isoformat()
     yesterday = (date.today() - timedelta(days=1)).isoformat()

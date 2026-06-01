@@ -11,7 +11,7 @@ from pathlib import Path
 
 
 def parse_data_id(data_id: str) -> tuple[str, str, str]:
-    """YYYYMMDD_<sellerId>_<accountId>_<token> -> (date, sellerId, accountId)"""
+    """YYYYMMDD_<sellerId>_<accountId>_<buyerId> -> (date, sellerId, accountId)"""
     parts = data_id.split("_", 3)
     return parts[0], parts[1], parts[2]
 
@@ -52,7 +52,7 @@ def main(path: str) -> None:
 
         print(f"## 会话 {i}: 买家 {buyer} ↔ 客服 {psn}")
         print(f"- 日期: {date}  {start_ts} – {end_ts}")
-        print(f"- accountId: `{first.get('accountId')}`  dataId: `{data_id[:40]}...`")
+        print("- accountId: `<redacted>`  dataId: `<redacted>`")
         print(f"- 共 {len(rows)} 条消息\n")
 
         for r in rows:
@@ -60,12 +60,11 @@ def main(path: str) -> None:
             from_nick = r.get("userNickFrom", "?")
             to_nick = r.get("userNickTo", "")
             msg = r.get("msg", "").replace("\n", " ")
-            # 客服消息从 sellerNick:psn 形式区分
-            is_cs = "旗舰店" in from_nick
+            is_cs = from_nick == psn or (psn != "?" and psn in from_nick)
             arrow = "→" if is_cs else "←"
             print(f"- `{ts}` {arrow} **{from_nick}**: {msg}")
         print()
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else "scout-output/sycm-chats-2026-05-28.json")
+    main(sys.argv[1] if len(sys.argv) > 1 else "scout-output/sycm-chats.json")

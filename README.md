@@ -58,7 +58,7 @@ git clone https://github.com/rakei076/sycm-cli.git ~/.claude/skills/sycm-cli
 ```
 == sycm-cli doctor ==
 ✓ 读到 N 个 taobao 域 cookie
-✓ _tb_token_ = xxxxxxx
+✓ _tb_token_ = <present>
 ✓ ...
 ```
 
@@ -89,9 +89,13 @@ git clone https://github.com/rakei076/sycm-cli.git ~/.claude/skills/sycm-cli
 | 子命令 | 用途 |
 |---|---|
 | `doctor` | 检查 cookie / 登录态 |
+| `presets` | 列出已封装和候选 API preset |
 | `list --date YYYY-MM-DD` | 列出某日的咨询会话（不含消息正文） |
 | `detail <dataId>` | 拉单个会话的全部消息（自动翻页） |
 | `fetch-recent --date YYYY-MM-DD --limit N` | **主力**：列表 + 全部详情，给 AI 用 |
+| `reception-list` / `effective-reception-list` / `filtered-reception-list` / `long-reception-list` | 服务接待明细类 API |
+| `evaluation-list` / `inquiry-loss-list` / `slow-rsps-list` / `sale-cs-list` | 客服服务高频 API |
+| `sale-shop-list` / `sale-item-list` | 交易与商品销售 API |
 
 详细 schema 见 [SKILL.md](SKILL.md)。
 
@@ -167,4 +171,3 @@ MIT
 </p>
 
 如果这个工具帮到了你，欢迎给个 ⭐️。
-

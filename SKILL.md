@@ -25,7 +25,7 @@ tags:
 
 ```bash
 cd ~/claudecodeworkspace/sycm-cli  # 或本 skill 目录
-uv run --with browser-cookie3 --with curl-cffi python sycm_cli.py fetch-recent --date 2026-05-27 --limit 10 --out chats.json
+uv run --with browser-cookie3 --with curl-cffi python sycm_cli.py fetch-recent --date YYYY-MM-DD --limit 10 --out chats.json
 ```
 
 输出 `chats.json` 包含某日前 N 个会话的元数据 + 全部消息内容，可直接喂给 LLM 做客服分析。
@@ -38,7 +38,7 @@ uv run --with browser-cookie3 --with curl-cffi python sycm_cli.py fetch-recent -
 2. `curl_cffi` 伪 TLS 指纹（`impersonate='chrome120'`）直调 sycm API
 3. **不接管浏览器、不开 profile、不需要 CDP、不用 Playwright/Selenium**
 
-风控视角下和正常人工浏览没有区别。
+请求形态尽量贴近正常人工浏览，但仍然必须控制频率并遵守下面的安全护栏。
 
 ## 子命令
 
@@ -47,6 +47,7 @@ uv run --with browser-cookie3 --with curl-cffi python sycm_cli.py fetch-recent -
 | 子命令 | 用途 |
 |---|---|
 | `doctor` | 检查 cookie 能否读到 / 登录态是否有效 |
+| `presets` | 列出已封装 API preset、优先级、状态和 endpoint |
 | `list --date YYYY-MM-DD [--page N --size N]` | 拉某日的咨询会话列表（不含消息内容） |
 | `detail <dataId>` | 拉单个会话的全部消息（自动翻页） |
 | `fetch-recent --date YYYY-MM-DD --limit N [--out file]` | **主力**：列表 + 全部详情，给 AI 一行命令即可拿全数据 |
@@ -58,6 +59,9 @@ uv run --with browser-cookie3 --with curl-cffi python sycm_cli.py fetch-recent -
 | 子命令 | 对应 sycm 页面 | 字段 |
 |---|---|---|
 | `reception-list` | 服务/接待明细 | 开始/结束时间、买家、客服、是否回复 |
+| `effective-reception-list` | 服务/有效接待明细 | 开始/结束时间、买家、客服、是否回复 |
+| `filtered-reception-list` | 服务/接待过滤明细 | 开始/结束时间、买家、客服、过滤类型 |
+| `long-reception-list` | 服务/长接待明细 | 开始/结束时间、买家、客服、接待时长 |
 | `evaluation-list` | 服务/售后评价 (邀评明细) | 接待时间、邀评时间、买家、客服、来源 |
 | `sale-shop-list` | 商品/销售分析 | 商品 ID/标题、店铺销售额、客服销售额、静默销售额 |
 | `sale-item-list` | 交易/订单明细 | 订单时间、订单金额、买家、客服、是否静默 |
@@ -67,9 +71,10 @@ uv run --with browser-cookie3 --with curl-cffi python sycm_cli.py fetch-recent -
 
 示例：
 ```bash
-sycm-cli sale-shop-list --date 2026-05-27 --limit 10
-sycm-cli evaluation-list --date 2026-05-27 --limit 20 --out eval.json
-sycm-cli reception-list --date 2026-05-27 --raw   # 输出原始 JSON
+sycm-cli sale-shop-list --date YYYY-MM-DD --limit 10
+sycm-cli evaluation-list --date YYYY-MM-DD --limit 20 --out eval.json
+sycm-cli reception-list --date YYYY-MM-DD --raw   # 输出原始 JSON
+sycm-cli presets   # 查看已封装 preset 和优先级
 ```
 
 ### Excel 一键下载（v0.3+）—— 商品数据 / 评价 / 销售等导出
@@ -82,27 +87,27 @@ sycm-cli reception-list --date 2026-05-27 --raw   # 输出原始 JSON
 sycm-cli excel sale-shop-list
 
 # 下指定日期范围 + 指定输出位置
-sycm-cli excel evaluation-list --date 2026-05-27 --end-date 2026-05-29 --out /tmp/eval.xlsx
+sycm-cli excel evaluation-list --date YYYY-MM-DD --end-date YYYY-MM-DD --out /tmp/eval.xlsx
 
 # 下旺旺接待对话明细
-sycm-cli excel reception-list --date 2026-05-27
+sycm-cli excel reception-list --date YYYY-MM-DD
 
 # 看最近的导出任务列表（含失败/排队中的）
 sycm-cli excel-tasks
 ```
 
-支持导出的 preset：`reception-list / evaluation-list / sale-shop-list / sale-item-list / sale-cs-list / inquiry-loss-list / slow-rsps-list`
+支持导出的 preset：`reception-list / effective-reception-list / filtered-reception-list / long-reception-list / evaluation-list / sale-shop-list / sale-item-list / sale-cs-list / inquiry-loss-list / slow-rsps-list`
 
 **典型输出**：
 ```
-[1/4] 触发 [店铺商品销售排行 (商品/销售分析)] 导出 (2026-05-27 ~ 2026-05-27)...
-       任务 ID: 15412429
+[1/4] 触发 [店铺商品销售排行 (商品/销售分析)] 导出 (YYYY-MM-DD ~ YYYY-MM-DD)...
+       任务 ID: 123456
 [2/4] 等服务端生成 Excel（最多 60 秒）...
-       完成。194 条记录。
+       完成。12 条记录。
 [3/4] 取 OSS 下载链接...
-[4/4] 下载到 ~/Downloads/sycm-exports/店铺绩效-专项分析-商品销售分析_20260527_20260527_全部.xlsx ...
+[4/4] 下载到 ~/Downloads/sycm-exports/店铺绩效-专项分析-商品销售分析_YYYYMMDD_YYYYMMDD_全部.xlsx ...
 
-✅ 完成: 17.7 KB, 194 条记录
+✅ 完成: 12.3 KB, 12 条记录
 ```
 
 OSS 临时链接 1 小时有效；过期需重新跑命令。
@@ -116,7 +121,7 @@ sycm-cli api <path> --param key=val --param key2=val2
 用来探索还没封装为子命令的接口。例如：
 ```bash
 sycm-cli api ww/consultation/detail/list \
-  -p startDate=20260527 -p endDate=20260527 -p dateType=day \
+  -p startDate=YYYYMMDD -p endDate=YYYYMMDD -p dateType=day \
   -p dateRange=day -p orderBy=startTime -p pageNo=1 -p pageSize=10
 ```
 
@@ -132,25 +137,25 @@ sycm-cli api ww/consultation/detail/list \
 
 ```json
 {
-  "fetchedAt": "2026-05-28T19:05:00",
-  "date": "2026-05-27",
-  "totalOnServer": 149,
+  "fetchedAt": "YYYY-MM-DDTHH:MM:SS",
+  "date": "YYYY-MM-DD",
+  "totalOnServer": 12,
   "fetched": 10,
   "sessions": [
     {
       "meta": {
-        "dataId": "20260527_<sellerId>_<accountId>_<buyerId>",
+        "dataId": "YYYYMMDD_<sellerId>_<accountId>_<buyerId>",
         "buyerNick": "x**",
         "psnNickName": "<店铺>:<客服名>",
         "accountNick": "<客服名>",
-        "startTime": "2026-05-27 23:16:41",
-        "endTime": "2026-05-27 23:16:59",
+        "startTime": "YYYY-MM-DD HH:MM:SS",
+        "endTime": "YYYY-MM-DD HH:MM:SS",
         "isSellerFst": "买家发起" | "客服主动跟进",
         "isUnReply": "已回复" | "未回复"
       },
       "messages": [
         {
-          "gmtCreated": "2026-05-27 23:16:41.000",
+          "gmtCreated": "YYYY-MM-DD HH:MM:SS.000",
           "userNickFrom": "<店铺>:<客服>" | "<买家旺旺>",
           "userNickTo": "<对方>",
           "msg": "聊天文本内容",
@@ -162,7 +167,7 @@ sycm-cli api ww/consultation/detail/list \
 }
 ```
 
-判断发言方：`'旗舰店' in userNickFrom` → 客服；否则 → 买家。
+判断发言方：优先用列表里的客服昵称匹配 `userNickFrom`；无法匹配时再按买家侧处理。
 
 ## 安全护栏（已写进 CLI，硬约束）
 
@@ -263,7 +268,7 @@ uv run --with browser-cookie3 --with curl-cffi python ~/.claude/skills/sycm-cli/
 
 ## 局限性
 
-- 只覆盖了"旺旺咨询明细"（接待明细页）。其他 180+ 接口待按需扩展
+- 已覆盖客服接待、有效接待、接待过滤、长接待、评价、询单流失、慢响应、客服销售、商品销售、订单明细等高频接口；其他接口待按需扩展
 - 详情接口每页最多 10 条消息，CLI 自动翻页处理
 - 列表 `pageSize` 实测最大约 20，过大会被服务端截断
 - Cookie 写在 Chrome Default profile，若你 Chrome 有多个 profile，可能要改 `browser_cookie3.chrome(cookie_file=...)` 指定
