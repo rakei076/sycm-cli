@@ -180,4 +180,18 @@ GET https://sycm.taobao.com/csp/api/detail/list
 
 MIT
 
+
+---
+
+## 联系作者
+
+欢迎**有想法、有需求、想加朋友**的人来撩。
+
+- 微信：扫下方二维码加好友
+- X / Twitter：[@LuJia32473](https://x.com/LuJia32473)
+
+<p align="center">
+  <img src="assets/wechat-qr.jpg" alt="WeChat QR" width="240">
+</p>
+
 如果这个工具帮到了你，欢迎给个 ⭐️。
