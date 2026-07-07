@@ -1,8 +1,21 @@
 # sycm-cli
 
-> 生意参谋（sycm.taobao.com）"旺旺咨询明细"全自动抓取 CLI
+![License](https://img.shields.io/github/license/rakei076/sycm-cli)
+![Python](https://img.shields.io/badge/python-3.10%2B-blue)
+![Stars](https://img.shields.io/github/stars/rakei076/sycm-cli?style=social)
+![Last Commit](https://img.shields.io/github/last-commit/rakei076/sycm-cli)
 
-给 AI 代理一行命令拉取淘宝/天猫自营店铺的客服聊天记录，用于客服分析、质检、回访话术挖掘。
+> 生意参谋（sycm.taobao.com）店铺数据抓取 + Excel 导出 CLI
+
+给 AI 代理一行命令拉取淘宝/天猫自营店铺的客服聊天、评价、销售、商品等经营数据，用于客服分析、质检、回访话术挖掘、经营复盘。
+
+---
+
+> 💡 推荐：自己做了一个电商模特图生成站 [paitumao.com](https://paitumao.com)，
+> 用的是目前最强的模特图生成模型，image-2 定价 ¥0.5/张，专门服务预算有限的小商家。
+> 有需要的话加我微信聊，备注一下来意。
+
+---
 
 ## 特性
 
@@ -185,7 +198,7 @@ MIT
 
 ## 联系作者
 
-欢迎**有想法、有需求、想加朋友**的人来撩。
+有想法、有需求，欢迎加微信找我，并注明来意。
 
 - 微信：扫下方二维码加好友
 - X / Twitter：[@LuJia32473](https://x.com/LuJia32473)
@@ -195,3 +208,9 @@ MIT
 </p>
 
 如果这个工具帮到了你，欢迎给个 ⭐️。
+
+---
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=rakei076/sycm-cli&type=Date)](https://star-history.com/#rakei076/sycm-cli&Date)
