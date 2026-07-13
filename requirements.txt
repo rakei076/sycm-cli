@@ -1,2 +1,3 @@
 browser-cookie3>=0.20
 curl-cffi>=0.7
+websocket-client>=1.8

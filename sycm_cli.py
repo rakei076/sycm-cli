@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """sycm-cli — 生意参谋"旺旺咨询明细"全自动抓取 CLI
 
-参考 twitter-cli 的纯本地认证模型：
-- browser_cookie3 从已登录的 Chrome 直接读 taobao cookies（无需手动输入账号密码）
+跨平台本地认证模型：
+- macOS: browser_cookie3 从已登录的 Chrome 直接读 taobao cookies
+- Windows: 专用 Chrome/Edge Profile + CDP 自动取得浏览器已解密 cookies
 - curl_cffi 伪 TLS 指纹直调 sycm API
-- 不开新 profile、不接管浏览器、不需要用户手动操作
+- 不导出 Cookie，不关闭浏览器安全保护，不接管用户默认 Profile
 
 接口完全反向工程自 sycm 客户端 JS（aligenius/customer-service-performance）。
 
@@ -19,9 +20,15 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import platform
 import random
+import shutil
+import socket
+import subprocess
 import sys
 import time
+import urllib.error
+import urllib.request
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -58,14 +65,177 @@ def _sleep_humanlike() -> None:
     time.sleep(random.uniform(MIN_DELAY_SEC, MAX_DELAY_SEC))
 
 
+def _has_login_cookie(cookies: dict[str, str]) -> bool:
+    return "_tb_token_" in cookies
+
+
+def _cookie_dict(items: list[dict[str, Any]]) -> dict[str, str]:
+    cookies: dict[str, str] = {}
+    # sycm.taobao.com 最后写入，使目标站点的同名 cookie 优先。
+    for target_domain in ("", "sycm.taobao.com"):
+        for cookie in items:
+            domain = str(cookie.get("domain") or "")
+            if "taobao.com" not in domain:
+                continue
+            if target_domain and target_domain not in domain:
+                continue
+            if not target_domain and "sycm.taobao.com" in domain:
+                continue
+            name = cookie.get("name")
+            value = cookie.get("value")
+            if name and value is not None:
+                cookies[str(name)] = str(value)
+    return cookies
+
+
+def _windows_state_dir() -> Path:
+    root = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
+    if not root:
+        root = str(Path.home() / "AppData" / "Local")
+    return Path(root) / "sycm-cli"
+
+
+def _find_windows_browser() -> Path:
+    override = os.environ.get("SYCM_BROWSER_PATH")
+    candidates = [Path(override)] if override else []
+    for env_name in ("PROGRAMFILES", "PROGRAMFILES(X86)", "LOCALAPPDATA"):
+        base = os.environ.get(env_name)
+        if not base:
+            continue
+        candidates.extend([
+            Path(base) / "Google/Chrome/Application/chrome.exe",
+            Path(base) / "Microsoft/Edge/Application/msedge.exe",
+        ])
+    for name in ("chrome.exe", "msedge.exe", "chrome", "msedge"):
+        found = shutil.which(name)
+        if found:
+            candidates.append(Path(found))
+    for candidate in candidates:
+        if candidate.is_file():
+            return candidate
+    raise RuntimeError(
+        "未找到 Chrome 或 Edge。请安装浏览器，或设置 SYCM_BROWSER_PATH 指向 chrome.exe。"
+    )
+
+
+def _free_local_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
+
+
+def _read_json(url: str, timeout: float = 1.5) -> Any:
+    with urllib.request.urlopen(url, timeout=timeout) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
+def _cdp_targets(port: int) -> list[dict[str, Any]]:
+    try:
+        data = _read_json(f"http://127.0.0.1:{port}/json/list")
+        return data if isinstance(data, list) else []
+    except (OSError, urllib.error.URLError, ValueError):
+        return []
+
+
+def _wait_for_cdp(port: int, timeout: float = 15) -> list[dict[str, Any]]:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        targets = _cdp_targets(port)
+        if targets:
+            return targets
+        time.sleep(0.25)
+    raise RuntimeError("Chrome 启动超时，未能建立自动登录连接。")
+
+
+def _cdp_cookies(port: int) -> dict[str, str]:
+    try:
+        from websocket import create_connection
+    except ImportError as exc:
+        raise RuntimeError("缺少 websocket-client，请重新运行安装命令。") from exc
+
+    targets = _wait_for_cdp(port)
+    target = next((t for t in targets if t.get("type") == "page"), targets[0])
+    ws_url = target.get("webSocketDebuggerUrl")
+    if not ws_url:
+        raise RuntimeError("Chrome 没有提供 CDP WebSocket 地址。")
+    ws = create_connection(ws_url, timeout=5, origin=f"http://127.0.0.1:{port}")
+    try:
+        ws.send(json.dumps({"id": 1, "method": "Network.getAllCookies"}))
+        while True:
+            message = json.loads(ws.recv())
+            if message.get("id") == 1:
+                if message.get("error"):
+                    raise RuntimeError(f"Chrome 读取 Cookie 失败：{message['error']}")
+                return _cookie_dict((message.get("result") or {}).get("cookies") or [])
+    finally:
+        ws.close()
+
+
+def _wait_for_windows_login(port: int, marker_file: Path) -> dict[str, str]:
+    print("首次使用或登录已过期，请在打开的浏览器中登录生意参谋；成功后会自动继续。", file=sys.stderr)
+    deadline = time.time() + int(os.environ.get("SYCM_LOGIN_TIMEOUT", "300"))
+    while time.time() < deadline:
+        cookies = _cdp_cookies(port)
+        if _has_login_cookie(cookies):
+            marker_file.touch()
+            return cookies
+        time.sleep(2)
+    raise RuntimeError("等待登录超时。请保留浏览器窗口，登录后重新运行命令。")
+
+
+def _windows_cdp_cookies() -> dict[str, str]:
+    state_dir = _windows_state_dir()
+    state_dir.mkdir(parents=True, exist_ok=True)
+    port_file = state_dir / "cdp-port"
+    marker_file = state_dir / "login-ready"
+
+    if port_file.exists():
+        try:
+            port = int(port_file.read_text(encoding="utf-8").strip())
+            cookies = _cdp_cookies(port)
+        except (OSError, ValueError, RuntimeError):
+            pass
+        else:
+            if _has_login_cookie(cookies):
+                return cookies
+            return _wait_for_windows_login(port, marker_file)
+
+    port = _free_local_port()
+    browser = _find_windows_browser()
+    profile_dir = state_dir / "chrome-profile"
+    args = [
+        str(browser),
+        f"--remote-debugging-port={port}",
+        "--remote-debugging-address=127.0.0.1",
+        "--remote-allow-origins=*",
+        f"--user-data-dir={profile_dir}",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--new-window",
+        REFERER_DETAIL_PAGE,
+    ]
+    if marker_file.exists():
+        args.insert(-2, "--start-minimized")
+    try:
+        subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except OSError as exc:
+        raise RuntimeError(f"无法启动浏览器：{exc}") from exc
+    port_file.write_text(str(port), encoding="utf-8")
+    _wait_for_cdp(port)
+    return _wait_for_windows_login(port, marker_file)
+
+
 def load_taobao_cookies() -> dict[str, str]:
     """从 Chrome 读取 taobao 域所有 cookies。"""
+    if platform.system() == "Windows":
+        return _windows_cdp_cookies()
+
     jar = browser_cookie3.chrome(domain_name="taobao.com")
     cookies: dict[str, str] = {}
     for c in jar:
         if c.domain and "taobao.com" in c.domain:
             cookies[c.name] = c.value
-    if "_tb_token_" not in cookies:
+    if not _has_login_cookie(cookies):
         raise RuntimeError(
             "未找到淘宝登录态。请在 Chrome 里打开并登录 sycm.taobao.com 后重试。"
         )
@@ -875,6 +1045,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main() -> None:
+    # 中文 Windows 的 cmd/SSH 常为 GBK；帮助文本里的 emoji 不应让 CLI 崩溃。
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(errors="replace")
     args = build_parser().parse_args()
     try:
         args.func(args)

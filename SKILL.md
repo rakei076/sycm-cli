@@ -2,7 +2,7 @@
 name: sycm-cli
 description: 生意参谋（sycm.taobao.com）店铺数据抓取 + Excel 导出 CLI。覆盖客服聊天 / 接待 / 评价 / 销售 / 退款 / 询单流失 / 商品排行 / 商品 360 / 品类 360 / 新品追踪等核心数据，支持一行命令导出 Excel 到本地。触发场景：用户提到"生意参谋"、"sycm"、"旺旺咨询明细"、"客服聊天记录"、"接待明细"、"客服分析"、"商品销售 Excel"、"导出 Excel"、"下载店铺数据"、"评价数据下载"、"销售明细 Excel"、"邀评数据"、"商品排行"、"商品 360"、"品类 360"、"新品追踪"等。
 author: rakel
-version: "0.4.0"
+version: "0.5.0"
 tags:
   - taobao
   - sycm
@@ -17,15 +17,14 @@ tags:
 **适用人群**：淘宝/天猫店铺商家自己拉取自己店铺的客服聊天、评价、销售、商品等经营数据，用于内部分析。
 
 **前置条件**：
-- macOS（已测试），Linux/Windows 理论可用（browser_cookie3 跨平台）
-- 本地 Chrome 已登录 sycm.taobao.com（不需要打开 sycm 页面，cookie 在本地存着即可）
+- macOS Chrome 已登录 sycm.taobao.com；Windows 首次运行会自动打开专用 Chrome/Edge，登录一次即可
 - 已装 `uv`（或 `pip` + Python 3.8+）
 
 ## 一句话用法
 
 ```bash
 cd ~/claudecodeworkspace/sycm-cli  # 或本 skill 目录
-uv run --with browser-cookie3 --with curl-cffi python sycm_cli.py fetch-recent --date YYYY-MM-DD --limit 10 --out chats.json
+uv run --with browser-cookie3 --with curl-cffi --with websocket-client python sycm_cli.py fetch-recent --date YYYY-MM-DD --limit 10 --out chats.json
 ```
 
 输出 `chats.json` 包含某日前 N 个会话的元数据 + 全部消息内容，可直接喂给 LLM 做客服分析。
@@ -34,9 +33,9 @@ uv run --with browser-cookie3 --with curl-cffi python sycm_cli.py fetch-recent -
 
 参考 [twitter-cli](~/.claude/skills/twitter-cli/) 的纯本地认证模型：
 
-1. `browser_cookie3.chrome(domain_name='taobao.com')` 从本地 Chrome 的 Cookies SQLite 直读所有 taobao 域 cookie（macOS 走 Keychain 自动解密）
+1. macOS 用 `browser_cookie3.chrome(domain_name='taobao.com')` 从 Chrome 直读 cookie；Windows 自动启动独立 Profile 的 Chrome/Edge，通过本机 CDP 读取浏览器已解密 cookie
 2. `curl_cffi` 伪 TLS 指纹（`impersonate='chrome120'`）直调 sycm API
-3. **不接管浏览器、不开 profile、不需要 CDP、不用 Playwright/Selenium**
+3. Windows 不读取默认 Profile、不导出 cookie，也不关闭 Chrome App-Bound Encryption 安全保护
 
 请求形态尽量贴近正常人工浏览，但仍然必须控制频率并遵守下面的安全护栏。
 
@@ -291,16 +290,19 @@ uv run --with browser-cookie3 --with curl-cffi python ~/.claude/skills/sycm-cli/
 | `list` 返回 0 条 | 漏传 `orderBy=startTime` 参数 | CLI 已内置，正常情况不会遇到 |
 | `RiskTriggered: 滑块` | sycm 触发风控 | 立即停 24 小时，不要重试 |
 | HTTP 5810 | session 超时 | 重新打开 Chrome 登录 sycm |
+| Windows 首次运行打开 Chrome/Edge | 正在创建专用登录环境 | 登录一次，CLI 会自动检测并继续 |
+| Windows 等待登录超时 | 5 分钟内没有完成登录 | 登录后重跑；可调整 `SYCM_LOGIN_TIMEOUT` |
+| Windows 找不到浏览器 | 未安装在常规路径 | 设置 `SYCM_BROWSER_PATH` 指向 Chrome/Edge exe |
 
 ## 文件清单
 
 - `sycm_cli.py` — 主 CLI
 - `format_chats.py` — JSON → Markdown 报告格式化（可选）
-- `requirements.txt` — Python 依赖（browser-cookie3, curl-cffi）
+- `requirements.txt` — Python 依赖（browser-cookie3, curl-cffi, websocket-client）
 
 ## 局限性
 
 - 只覆盖了"旺旺咨询明细"（接待明细页）。其他 180+ 接口待按需扩展
 - 详情接口每页最多 10 条消息，CLI 自动翻页处理
 - 列表 `pageSize` 实测最大约 20，过大会被服务端截断
-- Cookie 写在 Chrome Default profile，若你 Chrome 有多个 profile，可能要改 `browser_cookie3.chrome(cookie_file=...)` 指定
+- macOS Cookie 写在 Chrome Default profile，多 Profile 时可能要指定 `cookie_file`；Windows 使用独立的 `sycm-cli` Profile

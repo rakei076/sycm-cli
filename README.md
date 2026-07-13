@@ -19,8 +19,8 @@
 
 ## 特性
 
-- **零浏览器交互**：不接管 Chrome、不开新 profile、不用 CDP、不用 Playwright/Selenium
-- **纯本地认证**：从本地 Chrome 直读 cookie，伪 TLS 指纹直调 API
+- **跨平台本地认证**：macOS 从 Chrome 直读 cookie；Windows 使用 CLI 专用 Chrome/Edge Profile + CDP
+- **不降低浏览器安全性**：不导出 cookie、不关闭 Chrome 安全保护、不接管默认 Profile
 - **接口完全反向工程**：所有参数、字段、坑都摸清楚了，写在文档里
 - **安全护栏内置**：随机延迟、单次上限、风控关键词检测、夜禁
 - **AI 代理友好**：一条 wrapper 命令拿全数据，JSON schema 明确
@@ -37,8 +37,8 @@
 
 ### 前置条件
 
-- **macOS**（已测试）— Linux/Windows 理论可用但 cookie 解密差异未测
-- **Google Chrome**（不是 Brave/Edge/Arc/Safari）已登录 sycm.taobao.com
+- **macOS**：Google Chrome 已登录 sycm.taobao.com
+- **Windows 10/11**：Chrome 或 Edge；首次运行会自动打开专用浏览器，登录一次后自动复用
 - **uv**（推荐）或 Python 3.8+ + pip
 
 ### 装 uv（一次性）
@@ -57,13 +57,21 @@ git clone https://github.com/rakei076/sycm-cli.git ~/.claude/skills/sycm-cli
 
 ### 第一次跑
 
-**重要：先去 Chrome 打开并登录 https://sycm.taobao.com 一次**（cookie 存到本地）。
+macOS 请先在 Chrome 登录 https://sycm.taobao.com。Windows 可直接运行，CLI 会自动打开专用浏览器并等待首次登录。
 
 然后：
 
 ```bash
 ~/.claude/skills/sycm-cli/scripts/sycm.sh doctor
 ```
+
+Windows：
+
+```bat
+scripts\sycm.cmd doctor
+```
+
+Windows 启动器会优先使用 `uv`；否则使用 Python 3，并自动安装缺少的依赖。
 
 **macOS 用户首次运行会弹"钥匙串"授权弹窗** —— 这是 Chrome 的 cookie 用 macOS Keychain 加密，需要授权 Python 进程读它。点 **"始终允许"** 一次，以后就不再弹。
 
@@ -84,6 +92,9 @@ git clone https://github.com/rakei076/sycm-cli.git ~/.claude/skills/sycm-cli
 | `未找到淘宝登录态` | Chrome 没登录 sycm | 去 Chrome 登录 sycm.taobao.com |
 | Keychain 弹窗 deny 了 | 拒绝了 Keychain 授权 | 钥匙串访问 → 找 "Chrome Safe Storage" → 把终端加进访问控制 |
 | 多个 Chrome profile | 默认读 Default，可能不是你登录的那个 | 改 `sycm_cli.py` 里 `browser_cookie3.chrome()` 传 `cookie_file=` |
+| Windows 首次运行打开 Chrome/Edge | 正在创建 CLI 专用登录环境 | 登录一次，CLI 会自动检测并继续 |
+| Windows 等待登录超时 | 5 分钟内没有完成登录 | 登录后重新运行；可用 `SYCM_LOGIN_TIMEOUT` 调整秒数 |
+| Windows 找不到浏览器 | Chrome/Edge 未安装在常规位置 | 设置 `SYCM_BROWSER_PATH` 指向浏览器 exe |
 
 ### 一行命令拉数据
 

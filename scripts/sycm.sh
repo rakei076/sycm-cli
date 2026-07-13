@@ -7,16 +7,16 @@ SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # 路径 1：uv（推荐，自动管理依赖）
 if command -v uv >/dev/null 2>&1; then
-  exec uv run --with browser-cookie3 --with curl-cffi python "$SKILL_DIR/sycm_cli.py" "$@"
+  exec uv run --with browser-cookie3 --with curl-cffi --with websocket-client python "$SKILL_DIR/sycm_cli.py" "$@"
 fi
 
 # 路径 2：python3 + 已装依赖
 if command -v python3 >/dev/null 2>&1; then
-  if python3 -c "import browser_cookie3, curl_cffi" 2>/dev/null; then
+  if python3 -c "import browser_cookie3, curl_cffi, websocket" 2>/dev/null; then
     exec python3 "$SKILL_DIR/sycm_cli.py" "$@"
   fi
   cat >&2 <<EOF
-[sycm-cli] 缺 Python 依赖（browser_cookie3, curl_cffi）
+[sycm-cli] 缺 Python 依赖（browser_cookie3, curl_cffi, websocket-client）
 
 任选一种安装方式：
 
