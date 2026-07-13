@@ -4,6 +4,21 @@
 
 set -euo pipefail
 SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+WINDOWS_GIT_BASH=0
+
+# Git Bash on Windows may be run inside a workspace-only AI sandbox. Keep uv,
+# dependencies and the authenticated browser profile under the project root.
+case "$(uname -s 2>/dev/null || true)" in
+  MINGW*|MSYS*|CYGWIN*)
+    WINDOWS_GIT_BASH=1
+    winpath() { command -v cygpath >/dev/null 2>&1 && cygpath -w "$1" || printf '%s' "$1"; }
+    export UV_PYTHON_INSTALL_DIR="$(winpath "$SKILL_DIR/.uv-python")"
+    export UV_CACHE_DIR="$(winpath "$SKILL_DIR/.uv-cache")"
+    export UV_PROJECT_ENVIRONMENT="$(winpath "$SKILL_DIR/.venv")"
+    export SYCM_STATE_DIR="$(winpath "$SKILL_DIR/.runtime")"
+    export PYTHONPATH="$(winpath "$SKILL_DIR/.python-packages")${PYTHONPATH:+;$PYTHONPATH}"
+    ;;
+esac
 
 # 路径 1：uv（推荐，自动管理依赖）
 if command -v uv >/dev/null 2>&1; then
@@ -13,6 +28,11 @@ fi
 # 路径 2：python3 + 已装依赖
 if command -v python3 >/dev/null 2>&1; then
   if python3 -c "import browser_cookie3, curl_cffi, websocket" 2>/dev/null; then
+    exec python3 "$SKILL_DIR/sycm_cli.py" "$@"
+  fi
+  if [[ "$WINDOWS_GIT_BASH" == 1 ]]; then
+    mkdir -p "$SKILL_DIR/.python-packages"
+    python3 -m pip install --target "$SKILL_DIR/.python-packages" -r "$SKILL_DIR/requirements.txt"
     exec python3 "$SKILL_DIR/sycm_cli.py" "$@"
   fi
   cat >&2 <<EOF

@@ -27,6 +27,12 @@ class WindowsAuthTest(unittest.TestCase):
             with patch.dict("os.environ", {"SYCM_BROWSER_PATH": str(browser)}, clear=False):
                 self.assertEqual(sycm_cli._find_windows_browser(), browser)
 
+    def test_windows_state_dir_override(self):
+        with tempfile.TemporaryDirectory() as directory, patch.dict(
+            "os.environ", {"SYCM_STATE_DIR": directory}, clear=False
+        ):
+            self.assertEqual(sycm_cli._windows_state_dir(), Path(directory))
+
     def test_windows_dispatches_to_cdp(self):
         expected = {"_tb_token_": "secret"}
         with patch("sycm_cli.platform.system", return_value="Windows"), patch(

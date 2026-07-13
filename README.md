@@ -71,7 +71,9 @@ Windows：
 scripts\sycm.cmd doctor
 ```
 
-Windows 启动器会优先使用 `uv`；否则使用 Python 3，并自动安装缺少的依赖。
+Windows 启动器会优先使用 `uv`；否则使用 Python 3，并自动安装缺少的依赖。Python、依赖缓存和专用浏览器 Profile 都保存在项目内的隐藏目录，因此也能在只允许访问工作区的 Codex/AI 沙箱中运行。
+
+> `.runtime/` 含登录后的专用浏览器 Profile。它已加入 `.gitignore`，请勿提交、打包或分享该目录。
 
 **macOS 用户首次运行会弹"钥匙串"授权弹窗** —— 这是 Chrome 的 cookie 用 macOS Keychain 加密，需要授权 Python 进程读它。点 **"始终允许"** 一次，以后就不再弹。
 
@@ -95,6 +97,7 @@ Windows 启动器会优先使用 `uv`；否则使用 Python 3，并自动安装�
 | Windows 首次运行打开 Chrome/Edge | 正在创建 CLI 专用登录环境 | 登录一次，CLI 会自动检测并继续 |
 | Windows 等待登录超时 | 5 分钟内没有完成登录 | 登录后重新运行；可用 `SYCM_LOGIN_TIMEOUT` 调整秒数 |
 | Windows 找不到浏览器 | Chrome/Edge 未安装在常规位置 | 设置 `SYCM_BROWSER_PATH` 指向浏览器 exe |
+| Windows 报 `AppData\Roaming\uv\python: 拒绝访问` | Codex/AI 仅允许访问工作区，旧启动器把 Python 放在 AppData | 更新到最新版后重新运行 `scripts\sycm.cmd doctor`；运行时会自动放到项目目录 |
 
 ### 一行命令拉数据
 

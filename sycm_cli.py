@@ -89,6 +89,9 @@ def _cookie_dict(items: list[dict[str, Any]]) -> dict[str, str]:
 
 
 def _windows_state_dir() -> Path:
+    override = os.environ.get("SYCM_STATE_DIR")
+    if override:
+        return Path(override).expanduser()
     root = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
     if not root:
         root = str(Path.home() / "AppData" / "Local")

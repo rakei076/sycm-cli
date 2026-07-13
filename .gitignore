@@ -9,6 +9,10 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
+.runtime/
+.uv-python/
+.uv-cache/
+.python-packages/
 
 # macOS
 .DS_Store

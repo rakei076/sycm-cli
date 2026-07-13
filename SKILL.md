@@ -293,6 +293,9 @@ uv run --with browser-cookie3 --with curl-cffi python ~/.claude/skills/sycm-cli/
 | Windows 首次运行打开 Chrome/Edge | 正在创建专用登录环境 | 登录一次，CLI 会自动检测并继续 |
 | Windows 等待登录超时 | 5 分钟内没有完成登录 | 登录后重跑；可调整 `SYCM_LOGIN_TIMEOUT` |
 | Windows 找不到浏览器 | 未安装在常规路径 | 设置 `SYCM_BROWSER_PATH` 指向 Chrome/Edge exe |
+| Windows 报 `AppData\Roaming\uv\python: 拒绝访问` | AI 沙箱只允许访问工作区 | 更新 CLI 后运行 `scripts\sycm.cmd doctor`；新版会把 Python、依赖和登录 Profile 放在项目内 |
+
+Windows 的 `.runtime/` 包含登录 Profile，已被 Git 忽略；不要提交、打包或分享。
 
 ## 文件清单
 
