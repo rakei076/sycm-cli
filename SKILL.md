@@ -1,18 +1,9 @@
 ---
 name: sycm-cli
-description: 生意参谋（sycm.taobao.com）店铺数据抓取 + Excel 导出 CLI。覆盖客服聊天 / 接待 / 评价 / 销售 / 退款 / 询单流失 / 商品排行 / 商品 360 / 品类 360 / 新品追踪等核心数据，支持一行命令导出 Excel 到本地。触发场景：用户提到"生意参谋"、"sycm"、"旺旺咨询明细"、"客服聊天记录"、"接待明细"、"客服分析"、"商品销售 Excel"、"导出 Excel"、"下载店铺数据"、"评价数据下载"、"销售明细 Excel"、"邀评数据"、"商品排行"、"商品 360"、"品类 360"、"新品追踪"等。
-author: rakel
-version: "0.5.0"
-tags:
-  - taobao
-  - sycm
-  - customer-service
-  - ecommerce
-  - cli
-  - scraper
+description: 使用 sycm.taobao.com 的已登录本地浏览器读取淘宝/天猫自营店铺数据，生成标准报表并执行经营分析。覆盖首页大盘、销售、商品、新品、退款、接待、评价、客服对话、Excel 导出和多店铺登录态。当用户提到生意参谋、sycm、店铺数据、标准报表、店铺体检、日检、周复盘、测款、退货归因、客服质检、商品 360、新品追踪、下载店铺 Excel 或让 AI 分析店铺时使用。
 ---
 
-# sycm-cli — 生意参谋店铺数据抓取 + Excel 导出 CLI
+# sycm-cli — 生意参谋数据与店铺分析 Skill
 
 **适用人群**：淘宝/天猫店铺商家自己拉取自己店铺的客服聊天、评价、销售、商品等经营数据，用于内部分析。
 
@@ -23,21 +14,75 @@ tags:
 ## 一句话用法
 
 ```bash
-cd ~/claudecodeworkspace/sycm-cli  # 或本 skill 目录
-uv run --with browser-cookie3 --with curl-cffi --with websocket-client python sycm_cli.py fetch-recent --date YYYY-MM-DD --limit 10 --out chats.json
+scripts/sycm.sh fetch-recent --date YYYY-MM-DD --limit 10 --out chats.json
 ```
 
 输出 `chats.json` 包含某日前 N 个会话的元数据 + 全部消息内容，可直接喂给 LLM 做客服分析。
 
 ## 工作机制
 
-参考 [twitter-cli](~/.claude/skills/twitter-cli/) 的纯本地认证模型：
+参考 [twitter-cli](https://github.com/jackwener/twitter-cli) 的纯本地认证模型：
 
 1. macOS 用 `browser_cookie3.chrome(domain_name='taobao.com')` 从 Chrome 直读 cookie；Windows 自动启动独立 Profile 的 Chrome/Edge，通过本机 CDP 读取浏览器已解密 cookie
 2. `curl_cffi` 伪 TLS 指纹（`impersonate='chrome120'`）直调 sycm API
 3. Windows 不读取默认 Profile、不导出 cookie，也不关闭 Chrome App-Bound Encryption 安全保护
 
 请求形态尽量贴近正常人工浏览，但仍然必须控制频率并遵守下面的安全护栏。
+
+## AI 执行原则
+
+- 先确认店铺 profile、日期范围和用户要的报表/分析，再调用只读命令。
+- 优先使用已验证的子命令；除非用户明确要求侦查新接口，不使用 `api` 猜路径或参数。
+- 将真实数据写到本地临时文件，不写入 Skill、Git 或可分发文档。
+- 默认对买家昵称、客服昵称、订单 ID、商品 ID 和聊天正文脱敏。只有用户明确要求对话分析时才读取必要正文。
+- 每个结论附上数据来源、日期和字段名；数据不足时标记“不能判断”，不用经验补数。
+- 不将“当日完结的历史订单退款”除以“当日成交”生成商品退款率。无法建立同一订单队列时，只报告官方字段口径或“当日完结退款金额/笔数”。
+- 追溯某日完结退款时，优先执行 `refund-origin-analysis --date <D>`；它按 `ordPayTime` 找到原付款日并区分退款场景，但本身仍不是退货率。
+
+## 模块 1：标准全景报表
+
+当用户说“把现在能拿到的数据全部展开”、“做一份给其他 AI 分析的报表”或“给每张表一个真实范例”时，执行本模块。
+
+### 范围
+
+按五个数据域组织，不将一张多行表压缩成一个指标：
+
+| 数据域 | 必查命令 |
+|---|---|
+| 总览大盘 | `home-overview`, `home-table`, `home-trend`, `grow-factor` |
+| 商品与新品 | `item-list`, `cate-list`, `new-product-overview`, `new-product-list`, `new-product-trend`, `order-overview`, `order-trend`, `order-distribution`, `order-recommend` |
+| 销售与售后 | `sale-shop-list`, `sale-item-list`, `refund-item-list` |
+| 客户与客服 | `reception-list`, `evaluation-list`, `sale-cs-list`, `inquiry-loss-list`, `slow-rsps-list` |
+| 内容与直播 | `preheating-metrics`, `live-guide-overview`, `live-guide-trend` |
+
+`fetch-recent` 的聊天正文不默认进入全景报表；只报告可用会话数和字段结构，避免不必要暴露买家信息。
+
+### 执行
+
+1. 运行 `scripts/sycm.sh doctor`；失败则停止，告知用户登录态问题。
+2. 运行 `scripts/sycm.sh --help` 保存当前命令面，防止报表清单落后于代码。
+3. 对上表每个命令只取一个最小真实样本；列表类使用 `--limit 1`，趋势类使用最小有效日期范围。
+4. 保存完整输出到本地临时目录，在对话中只展示脱敏范例。
+5. 命令返回空表时仍保留该行，标记“0 条/当日无数据”；不把空表说成接口不可用。
+6. 命令失败时记录错误类型（登录、权限、风控、参数、网络），不猜造样例。
+
+### 输出合同
+
+首先输出覆盖摘要：检查日期、店铺 profile、已成功/空表/失败命令数。然后每个数据域输出一张表：
+
+| 报表 | 命令 | 日期口径 | 记录数 | 关键字段 | 脱敏真实样例 | 口径/限制 | 状态 |
+|---|---|---|---:|---|---|---|---|
+
+硬性要求：
+
+- “真实样例”只取一行或一个汇总对象，但必须来自本次真实请求。
+- “关键字段”写中文名和原始 field code，便于其他 AI 继续分析。
+- 不少列已验证命令；不用“等”省略剩余报表。
+- 本模块只呈现数据，不做经营归因。需要分析时，再进入对应的日检、周复盘或专项模块。
+
+## 分析模块
+
+当用户要求日体检、周复盘、测款、退货归因、广告 ROI 或客服质检时，读取 [references/analysis-workflows.md](references/analysis-workflows.md) 中对应模块的全部指令，严格按其口径、输出合同和停止条件执行。
 
 ## 子命令
 
@@ -85,6 +130,8 @@ sycm-cli reception-list --date YYYY-MM-DD --raw   # 输出原始 JSON
 | `new-product-overview` | 商品/新品追踪 → 顶部汇总卡 | newItmCnt、shopUvNew、payAmtNew、addCartCntNew | 不是 list，返回汇总对象 |
 | `new-product-trend` | 商品/新品追踪 → 趋势图 | self/industry 两组时序数据 | 建议加 `--raw` 拿全 |
 
+日期能力以实测为准：overview 只确认单日；trend 的单日调用返回截至该日的固定 30 日序列；overview/trend 显式 7/30 日区间会报 1003。list 的 7/30 日调用虽成功，但曾返回完全相同结果，未确认前不要宣传为两个独立窗口。
+
 示例：
 ```bash
 # 看昨天销售前 10 商品 (商品排行)
@@ -116,6 +163,8 @@ sycm **首页 `/portal/home.htm`** 顶部那块官方口径大盘，独立的 `/
 sycm-cli home-overview --date YYYY-MM-DD          # 昨天的支付/访客/转化/退款率/加购
 sycm-cli home-table    --date 起始 --end-date 结束  # 多日并排大表(默认最近6天)，含较上一周期
 sycm-cli grow-factor   --date YYYY-MM-DD           # 广告引导/直播/新品/会员各贡献多少成交
+sycm-cli refund-origin-analysis --date YYYY-MM-DD  # 该日完结退款来自哪些付款日/退款场景
+sycm-cli refund-all-list --date YYYY-MM-DD --by case-end --raw  # 逐笔含订单号和原付款时间
 sycm-cli home-overview --date YYYY-MM-DD --raw     # 拿全 self/rivalAvg/rivalGood + cycleCrc 环比
 ```
 

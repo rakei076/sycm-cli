@@ -5,9 +5,9 @@
 ![Stars](https://img.shields.io/github/stars/rakei076/sycm-cli?style=social)
 ![Last Commit](https://img.shields.io/github/last-commit/rakei076/sycm-cli)
 
-> 生意参谋（sycm.taobao.com）店铺数据抓取 + Excel 导出 CLI
+> 生意参谋（sycm.taobao.com）店铺数据 CLI + AI 经营分析 Skill
 
-给 AI 代理一行命令拉取淘宝/天猫自营店铺的客服聊天、评价、销售、商品等经营数据，用于客服分析、质检、回访话术挖掘、经营复盘。
+给 AI 代理一行命令拉取淘宝/天猫自营店铺的大盘、客服、评价、销售、商品、新品和退款数据，并按可复用的方法生成报表和经营分析。
 
 ---
 
@@ -21,9 +21,25 @@
 
 - **跨平台本地认证**：macOS 从 Chrome 直读 cookie；Windows 使用 CLI 专用 Chrome/Edge Profile + CDP
 - **不降低浏览器安全性**：不导出 cookie、不关闭 Chrome 安全保护、不接管默认 Profile
-- **接口完全反向工程**：所有参数、字段、坑都摸清楚了，写在文档里
-- **安全护栏内置**：随机延迟、单次上限、风控关键词检测、夜禁
+- **接口以真实页面请求验证**：稳定命令直接开放，未确认的日期窗口和字段口径明确标注
+- **安全护栏内置**：随机延迟、可选请求硬上限、风控关键词检测、夜禁
 - **AI 代理友好**：一条 wrapper 命令拿全数据，JSON schema 明确
+
+## AI 店铺分析 Skill
+
+仓库内的 [SKILL.md](SKILL.md) 是给 AI 代理执行的机器说明，不是 README 的复制。它目前定义了七个可单独触发的模块：
+
+| 模块 | 它回答什么 | 关键边界 |
+|---|---|---|
+| 标准全景报表 | 当前到底能拿到哪些数据 | 每张表都列出，不用“等”省略 |
+| 日体检 | 昨天是否有需要立即处理的异常 | 用完整日，只和自己过去比 |
+| 周复盘 | 本周是流量、转化还是客单价在变 | 周 UV 不用日 UV 直接相加伪造 |
+| 测款专项 | 哪些新品值得继续验证 | 没有毛利/退货队列时不直接放量 |
+| 退货归因 | 哪些款是退款事件热点、原因是什么 | 禁止用历史订单退款除以当日成交 |
+| 广告 ROI | 万相台的场景/计划/商品效率 | 需 `alimama-cli`，只读，不自动停投 |
+| 客服质检 | 客服是否真正回答了买家问题 | 对话脱敏，不因空评分或情绪给人员贴标签 |
+
+所有模块都要附上数据日期、命令和字段口径，并将建议收敛到 0–2 个动作。完整分析规则在 [references/analysis-workflows.md](references/analysis-workflows.md)。
 
 参考 [twitter-cli](https://github.com/jackwener/twitter-cli) 的纯本地认证模型设计。
 
@@ -39,7 +55,7 @@
 
 - **macOS**：Google Chrome 已登录 sycm.taobao.com
 - **Windows 10/11**：Chrome 或 Edge；首次运行会自动打开专用浏览器，登录一次后自动复用
-- **uv**（推荐）或 Python 3.8+ + pip
+- **uv**（推荐）或 Python 3.10+ + pip
 
 ### 装 uv（一次性）
 
@@ -51,8 +67,11 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 ### 安装本 skill
 
 ```bash
-# 克隆到 Claude Code skill 目录
+# Claude Code
 git clone https://github.com/rakei076/sycm-cli.git ~/.claude/skills/sycm-cli
+
+# Codex
+git clone https://github.com/rakei076/sycm-cli.git ~/.codex/skills/sycm-cli
 ```
 
 ### 第一次跑
@@ -123,6 +142,8 @@ Windows 启动器会优先使用 `uv`；否则使用 Python 3，并自动安装�
 | `reception-list` / `evaluation-list` / `inquiry-loss-list` / `slow-rsps-list` / `sale-cs-list` | 客服与服务高频 API |
 | `sale-shop-list` / `sale-item-list` | 交易与商品销售 API |
 | `refund-item-list` | 退款商品明细（按款退款金额/笔数/率/原因） |
+| `refund-all-list` | 全部退款逐笔明细；可按申请、完结或原订单付款时间筛选 |
+| `refund-origin-analysis` | 将某日完结退款追溯到原付款日，并拆分退款场景和时间间隔 |
 | `excel <preset>` | 一行命令导出对应数据为 Excel（自动触发→排队→下载）|
 
 ### 商品大类（v0.4+，新 cc-v2 接口）
@@ -143,6 +164,18 @@ Windows 启动器会优先使用 `uv`；否则使用 Python 3，并自动安装�
 网络错误和 HTTP 5xx 默认最多重试 2 次；可用 `SYCM_RETRIES=N` 调整。业务错误会返回非零退出码。
 
 详细 schema、字段定义、参数风格区别（sycm-v1 vs cc-v2）见 [SKILL.md](SKILL.md)。
+
+### 逐笔退款溯源
+
+```bash
+# 某日完成的全部退款：逐笔保留订单付款、退款申请和退款完结时间
+scripts/sycm.sh refund-all-list --date 2026-07-17 --by case-end --out /tmp/refunds.json
+
+# 汇总这些退款来自哪些付款日、属于哪种退款场景、间隔多久
+scripts/sycm.sh refund-origin-analysis --date 2026-07-17
+```
+
+`refund-all-list` 的时间口径还可选 `case-create`（退款申请日）和 `order-pay`（原订单付款日）。逐笔记录可回答“这笔退款原来什么时候付款”，但不能单独算真实退货率。真实退货率必须以同一付款批次的支付订单/件数为分母，并只保留最终发生 `退货退款` 的订单/件。
 
 ## 安全护栏
 
@@ -165,6 +198,29 @@ CLI 内置的护栏分两层：
 **风控按"短时高频"判定，不按"总量"**，所以日常批量拉数据完全没问题。
 
 触发 `RiskTriggered` 时**绝对不要重试** —— 重试会让风控升级，等 24 小时再用。
+
+### 本地数据与隐私
+
+- Cookie 和命名店铺 Profile 只保存在本机；`.runtime/`、`.taobao-cli/profiles/`、`.env*`、运行 JSON、缓存和私钥都不得提交。
+- `--raw` 和 `--out` 可能包含买家昵称、客服昵称、订单 ID、商品 ID 与聊天正文。分享给第三方或 AI 前先脱敏。
+- AI 分析默认只展示匿名商品代号和聚合结果；只有用户明确允许时才读取必要的聊天正文。
+- Excel 下载地址只接受无内嵌账号密码的 HTTPS URL；浏览器 CDP 读取只允许连接本机地址。
+
+## 开发与验证
+
+```bash
+# 单元测试（隔离安装测试与运行依赖）
+uv run --with pytest --with browser-cookie3 --with curl-cffi \
+  --with websocket-client python -m pytest -q
+
+# Skill 结构校验（在安装了 Codex skill-creator 的机器上）
+python ~/.codex/skills/.system/skill-creator/scripts/quick_validate.py .
+
+# 登录态和最小只读探针
+scripts/sycm.sh doctor
+```
+
+发布前还应执行静态检查、依赖漏洞扫描和 Git 历史密钥扫描；真实店铺输出始终写入仓库外的临时目录。
 
 ## 接口情报
 
@@ -201,6 +257,12 @@ GET https://sycm.taobao.com/csp/api/detail/list
 ```
 
 ## 更新记录
+
+### v0.6（2026-07-19）
+- **AI 经营分析 Skill**：新增标准全景、日体检、周复盘、测款、退货归因、广告 ROI、客服质检七个模块及严格输出口径。
+- **逐笔退款溯源**：新增 `refund-all-list` 和 `refund-origin-analysis`，可从退款完结日追到原订单付款日，并区分退货退款、未发货退款、未收货退款和已收货仅退款。
+- **口径纠错**：禁止用当日完结的历史订单退款除以当日成交；新品总览/趋势的日期能力按真实请求结果标注。
+- **安全加固**：限制 CDP 为本机地址、Excel 下载为 HTTPS，并补充分页去重和不安全 URL 测试。
 
 ### v0.5（2026-07）
 - **首页「数据概览」多日表格 `home-table`**：一条命令拉页面「数据概览」四个 Tab 的完整 **32 项指标**（支付 10 / 意向 7 / 履约售后 10 / 推广 5），多日并排 + 每格「较上一周期」，等价于页面点「表格」那张多天对比表；字段中文名对页面逐格核对锁定。

@@ -44,7 +44,6 @@ def main(path: str) -> None:
         rows.sort(key=lambda r: r.get("gmtCreated", ""))
         first = rows[0]
         buyer = first.get("buyerNick", "?")
-        cs = first.get("accountNick", "?")
         psn = first.get("psnNickName", "?")
         date = first.get("dateId", "")
         start_ts = rows[0].get("gmtCreated", "")[11:19]
@@ -58,7 +57,6 @@ def main(path: str) -> None:
         for r in rows:
             ts = r.get("gmtCreated", "")[11:19]
             from_nick = r.get("userNickFrom", "?")
-            to_nick = r.get("userNickTo", "")
             msg = r.get("msg", "").replace("\n", " ")
             is_cs = from_nick == psn or (psn != "?" and psn in from_nick)
             arrow = "→" if is_cs else "←"

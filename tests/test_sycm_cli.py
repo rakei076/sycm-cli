@@ -214,3 +214,83 @@ def test_home_cell_renders_value_and_cyclecrc():
     assert sycm_cli._home_cell({"value": 0.1234}, "pct", show_crc=False) == "12.34%"
     # 缺字段（服务端未返回）显示 -
     assert sycm_cli._home_cell(None, "amt", show_crc=True) == "-"
+
+
+def test_refund_case_end_uses_end_date_fields(monkeypatch):
+    seen = {}
+
+    def fake_get(path, params, cookies, referer=None):
+        seen.update(path=path, params=params, referer=referer)
+        return {"data": {"count": 0, "dataSource": []}}
+
+    monkeypatch.setattr(sycm_cli, "_api_get", fake_get)
+    sycm_cli.fetch_refund_all_list(
+        start_date="2026-07-17", end_date="2026-07-17",
+        query_type="caseEnd", cookies={"_tb_token_": "t"},
+    )
+    assert seen["path"] == "refund/all/detail/list"
+    assert seen["params"]["endStartDate"] == "20260717"
+    assert seen["params"]["endEndDate"] == "20260717"
+    assert "startDate" not in seen["params"]
+    assert seen["params"]["dateRange"] == "1d"
+
+
+def test_refund_origin_summary_separates_returns_from_unshipped():
+    rows = [
+        {"caseId": "1", "orderId": "o1", "ordPayTime": "2026-07-17 10:00:00",
+         "caseEndTime": "2026-07-17 12:00:00", "caseSceneType": "未发货退款",
+         "refundRealAmt": 100},
+        {"caseId": "2", "orderId": "o2", "ordPayTime": "2026-07-10 10:00:00",
+         "caseEndTime": "2026-07-17 12:00:00", "caseSceneType": "退货退款",
+         "refundRealAmt": 200},
+    ]
+    summary = sycm_cli.summarize_refund_origins(rows)
+    assert summary["records"] == 2
+    assert summary["refundRealAmt"] == 300
+    assert {x["name"]: x["count"] for x in summary["scenes"]} == {
+        "未发货退款": 1, "退货退款": 1,
+    }
+    assert {x["name"]: x["count"] for x in summary["ageBuckets"]}["4-7天"] == 1
+
+
+def test_fetch_all_refunds_paginates_and_preserves_rows_without_case_id(monkeypatch):
+    pages = {
+        1: {"data": {"count": 4, "dataSource": [
+            {"caseId": "1", "orderId": "o1"},
+            {"orderId": "missing-1"},
+        ]}},
+        2: {"data": {"count": 4, "dataSource": [
+            {"caseId": "1", "orderId": "duplicate"},
+            {"orderId": "missing-2"},
+        ]}},
+    }
+
+    def fake_fetch(**kwargs):
+        return pages[kwargs["page_no"]]
+
+    monkeypatch.setattr(sycm_cli, "fetch_refund_all_list", fake_fetch)
+    rows = sycm_cli.fetch_all_refunds(
+        start_date="2026-07-17", end_date="2026-07-17", cookies={"t": "x"},
+    )
+    assert [row["orderId"] for row in rows] == ["o1", "missing-1", "missing-2"]
+
+
+@pytest.mark.parametrize("url", [
+    "file:///etc/passwd",
+    "http://example.com/file.xlsx",
+    "https://user:pass@example.com/file.xlsx",
+])
+def test_download_url_rejects_unsafe_schemes_and_credentials(url):
+    with pytest.raises(RuntimeError, match="不安全"):
+        sycm_cli._validated_https_url(url)
+
+
+def test_download_url_accepts_https():
+    assert sycm_cli._validated_https_url("https://example.com/file.xlsx") == (
+        "https://example.com/file.xlsx"
+    )
+
+
+def test_read_json_rejects_nonlocal_url():
+    with pytest.raises(ValueError, match="本机"):
+        sycm_cli._read_json("https://example.com/json")

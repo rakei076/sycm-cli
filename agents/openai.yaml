@@ -1,0 +1,7 @@
+interface:
+  display_name: "生意参谋店铺分析"
+  short_description: "读取自营店铺数据，生成报表、日检、复盘与专项分析"
+  default_prompt: "Use $sycm-cli to read my store data and run the appropriate report or analysis workflow."
+
+policy:
+  allow_implicit_invocation: true

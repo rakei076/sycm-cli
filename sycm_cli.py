@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""sycm-cli — 生意参谋"旺旺咨询明细"全自动抓取 CLI
+"""sycm-cli — 生意参谋店铺数据与经营分析 CLI
 
 跨平台本地认证模型：
 - macOS: browser_cookie3 从已登录的 Chrome 直接读 taobao cookies
@@ -7,13 +7,8 @@
 - curl_cffi 伪 TLS 指纹直调 sycm API
 - 不导出 Cookie，不关闭浏览器安全保护，不接管用户默认 Profile
 
-接口完全反向工程自 sycm 客户端 JS（aligenius/customer-service-performance）。
-
-子命令：
-    doctor          检查 cookie 与登录态
-    list            拉某日的旺旺咨询会话列表（分页）
-    detail <id>     拉单个会话的全部消息
-    fetch-recent    一行命令：拉某日最新 N 个会话 + 完整对话内容（推荐 AI agent 用）
+稳定命令来自 sycm 页面请求与客户端 JS 的实际验证，覆盖大盘、商品、新品、
+销售、退款、客服与 Excel 导出。运行 ``--help`` 查看当前完整命令面。
 """
 from __future__ import annotations
 
@@ -24,10 +19,12 @@ import platform
 import random
 import shutil
 import socket
-import subprocess
+# Used without a shell and only for the locally resolved Chrome/Edge binary.
+import subprocess  # nosec B404
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -64,7 +61,8 @@ class RiskTriggered(RuntimeError):
 
 
 def _sleep_humanlike() -> None:
-    time.sleep(random.uniform(MIN_DELAY_SEC, MAX_DELAY_SEC))
+    # This jitter is traffic pacing, not a security token.
+    time.sleep(random.uniform(MIN_DELAY_SEC, MAX_DELAY_SEC))  # nosec B311
 
 
 def _has_login_cookie(cookies: dict[str, str]) -> bool:
@@ -130,8 +128,20 @@ def _free_local_port() -> int:
 
 
 def _read_json(url: str, timeout: float = 1.5) -> Any:
-    with urllib.request.urlopen(url, timeout=timeout) as response:
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.scheme != "http" or parsed.hostname not in {"127.0.0.1", "localhost", "::1"}:
+        raise ValueError("CDP JSON 地址必须是本机 HTTP 地址")
+    # URL is constrained to a local HTTP CDP endpoint above.
+    with urllib.request.urlopen(url, timeout=timeout) as response:  # nosec B310
         return json.loads(response.read().decode("utf-8"))
+
+
+def _validated_https_url(url: str) -> str:
+    """Reject local/file/custom-scheme download URLs returned by the server."""
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
+        raise RuntimeError("服务端返回了不安全的下载地址（必须是无凭据的 HTTPS URL）")
+    return url
 
 
 def _cdp_targets(port: int) -> list[dict[str, Any]]:
@@ -222,7 +232,10 @@ def _windows_cdp_cookies() -> dict[str, str]:
     if marker_file.exists():
         args.insert(-2, "--start-minimized")
     try:
-        subprocess.Popen(args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        # No shell is involved; browser is a resolved local executable and arguments are separate.
+        subprocess.Popen(  # nosec B603
+            args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
     except OSError as exc:
         raise RuntimeError(f"无法启动浏览器：{exc}") from exc
     port_file.write_text(str(port), encoding="utf-8")
@@ -608,6 +621,114 @@ def fetch_preset(preset_name: str, *, start_date: str, end_date: str,
     return _api_get(preset["path"], params, cookies, referer=preset["referer"])
 
 
+def fetch_refund_all_list(*, start_date: str, end_date: str,
+                          query_type: str = "caseEnd", page_no: int = 1,
+                          page_size: int = 100,
+                          cookies: dict[str, str] | None = None) -> dict[str, Any]:
+    """拉全部退款明细，可按申请、完结或原订单付款时间筛选。"""
+    if query_type not in {"caseCreate", "caseEnd", "orderPay"}:
+        raise ValueError(f"不支持的退款时间口径: {query_type}")
+    cookies = cookies or load_taobao_cookies()
+    sd, ed = start_date.replace("-", ""), end_date.replace("-", "")
+    params = {
+        "_": str(int(time.time() * 1000)),
+        "token": cookies.get("_tb_token_", ""),
+        "queryType": query_type,
+        "dateType": "day",
+        "dateRange": "1d" if sd == ed else "cz",
+        "pageNo": str(page_no),
+        "pageSize": str(page_size),
+        "orderBy": "caseId",
+        "order": "desc",
+        "cardUid": "sycm-cli-refund-all",
+    }
+    path = "refund/all/detail/list"
+    if query_type == "caseEnd":
+        params.update({"endStartDate": sd, "endEndDate": ed})
+    else:
+        params.update({"startDate": sd, "endDate": ed})
+        if query_type == "orderPay":
+            path = "refund/all/detail/ord-pay/list"
+    return _api_get(path, params, cookies, referer=REFERER_DETAIL_PAGE)
+
+
+def fetch_all_refunds(*, start_date: str, end_date: str,
+                      query_type: str = "caseEnd",
+                      cookies: dict[str, str] | None = None) -> list[dict[str, Any]]:
+    """分页拉完整退款明细；按 caseId 去重。"""
+    cookies = cookies or load_taobao_cookies()
+    rows: list[dict[str, Any]] = []
+    page_no, page_size, total = 1, 100, None
+    while total is None or len(rows) < total:
+        payload = fetch_refund_all_list(
+            start_date=start_date, end_date=end_date, query_type=query_type,
+            page_no=page_no, page_size=page_size, cookies=cookies,
+        )
+        data = payload.get("data") or {}
+        batch = data.get("dataSource") or []
+        total = int(data.get("count") or 0)
+        rows.extend(r for r in batch if isinstance(r, dict))
+        if not batch or len(rows) >= total:
+            break
+        page_no += 1
+    deduped: list[dict[str, Any]] = []
+    seen_case_ids: set[str] = set()
+    for row in rows:
+        case_id = row.get("caseId")
+        # Missing IDs must not collapse unrelated rows into a single "None" record.
+        if case_id in (None, ""):
+            deduped.append(row)
+            continue
+        key = str(case_id)
+        if key not in seen_case_ids:
+            seen_case_ids.add(key)
+            deduped.append(row)
+    return deduped
+
+
+def summarize_refund_origins(rows: list[dict[str, Any]]) -> dict[str, Any]:
+    """汇总退款完结事件来自哪些付款日、退款场景及间隔。"""
+    from collections import Counter, defaultdict
+
+    pay_days: Counter[str] = Counter()
+    pay_day_amounts: dict[str, float] = defaultdict(float)
+    scenes: Counter[str] = Counter()
+    scene_amounts: dict[str, float] = defaultdict(float)
+    ages: Counter[str] = Counter()
+    age_amounts: dict[str, float] = defaultdict(float)
+    age_order = ("当日", "1-3天", "4-7天", "8-14天", "15-30天", "30天以上")
+    for row in rows:
+        amount = float(row.get("refundRealAmt") or 0)
+        pay_day = str(row.get("ordPayTime") or "")[:10] or "缺失"
+        scene = str(row.get("caseSceneType") or "未知")
+        pay_days[pay_day] += 1
+        pay_day_amounts[pay_day] += amount
+        scenes[scene] += 1
+        scene_amounts[scene] += amount
+        try:
+            paid = datetime.fromisoformat(str(row["ordPayTime"]))
+            ended = datetime.fromisoformat(str(row["caseEndTime"]))
+            days = (ended.date() - paid.date()).days
+        except (KeyError, TypeError, ValueError):
+            continue
+        bucket = ("当日" if days == 0 else "1-3天" if days <= 3 else
+                  "4-7天" if days <= 7 else "8-14天" if days <= 14 else
+                  "15-30天" if days <= 30 else "30天以上")
+        ages[bucket] += 1
+        age_amounts[bucket] += amount
+    return {
+        "records": len(rows),
+        "uniqueOrders": len({str(r.get("orderId")) for r in rows if r.get("orderId")}),
+        "refundRealAmt": round(sum(float(r.get("refundRealAmt") or 0) for r in rows), 2),
+        "scenes": [{"name": k, "count": v, "amount": round(scene_amounts[k], 2)}
+                   for k, v in scenes.most_common()],
+        "payDays": [{"date": k, "count": pay_days[k], "amount": round(pay_day_amounts[k], 2)}
+                    for k in sorted(pay_days, reverse=True)],
+        "ageBuckets": [{"name": k, "count": ages[k], "amount": round(age_amounts[k], 2)}
+                       for k in age_order],
+    }
+
+
 def _dig(obj: Any, path: str) -> Any:
     """从嵌套 dict 里按 'a.b.c' 路径取值。空 path 返回 obj。"""
     if not path:
@@ -787,8 +908,8 @@ def cmd_excel(args: argparse.Namespace) -> None:
     server_filename = task.get("fileName", "?")
     print(f"       完成。{record_num} 条记录。", file=sys.stderr)
 
-    print(f"[3/4] 取 OSS 下载链接...", file=sys.stderr)
-    url = get_excel_download_url(task_id, biz_code, cookies=cookies)
+    print("[3/4] 取 OSS 下载链接...", file=sys.stderr)
+    url = _validated_https_url(get_excel_download_url(task_id, biz_code, cookies=cookies))
 
     # 默认输出路径
     if args.out:
@@ -796,12 +917,15 @@ def cmd_excel(args: argparse.Namespace) -> None:
     else:
         Path.home().joinpath("Downloads/sycm-exports").mkdir(parents=True, exist_ok=True)
         # 用 server 文件名最后一段（去掉路径）
-        suggested = server_filename.split("/")[-1] if "/" in server_filename else f"{args.preset_name}_{args.date}.xlsx"
+        suggested = Path(server_filename.replace("\\", "/")).name
+        if not suggested or suggested in {".", ".."}:
+            suggested = f"{args.preset_name}_{args.date}.xlsx"
         out_path = Path.home() / "Downloads" / "sycm-exports" / suggested
 
     print(f"[4/4] 下载到 {out_path} ...", file=sys.stderr)
     import urllib.request
-    urllib.request.urlretrieve(url, out_path)
+    # URL is constrained to HTTPS above.
+    urllib.request.urlretrieve(url, out_path)  # nosec B310
     size_kb = out_path.stat().st_size / 1024
     print(f"\n✅ 完成: {out_path} ({size_kb:.1f} KB, {record_num} 条记录)")
 
@@ -924,6 +1048,59 @@ def cmd_preset_list(args: argparse.Namespace) -> None:
         print(f"[{i:2}] {vals}")
 
 
+def cmd_refund_all_list(args: argparse.Namespace) -> None:
+    end = args.end_date or args.date
+    query_type = {"case-end": "caseEnd", "case-create": "caseCreate",
+                  "order-pay": "orderPay"}[args.by]
+    data = fetch_refund_all_list(
+        start_date=args.date, end_date=end, query_type=query_type,
+        page_no=args.page, page_size=args.limit,
+    )
+    if args.out:
+        Path(args.out).write_text(json.dumps(data, ensure_ascii=False, indent=2))
+        print(f"已写入 {args.out}", file=sys.stderr)
+        return
+    if args.raw:
+        print(json.dumps(data, ensure_ascii=False, indent=2))
+        return
+    payload = data.get("data") or {}
+    rows = payload.get("dataSource") or []
+    print(f"# 全部退款明细  {args.date}{' ~ ' + end if end != args.date else ''} "
+          f"按 {args.by}，共 {payload.get('count', 0)} 条，本页 {len(rows)} 条\n")
+    for i, row in enumerate(rows, 1):
+        print(f"[{i:2}] 完结={row.get('caseEndTime', '-')} | 付款={row.get('ordPayTime', '-')} | "
+              f"场景={row.get('caseSceneType', '-')} | 实退={row.get('refundRealAmt', '-')} | "
+              f"商品={str(row.get('itemTitle') or '-')[:32]}")
+
+
+def cmd_refund_origin_analysis(args: argparse.Namespace) -> None:
+    end = args.end_date or args.date
+    summary = summarize_refund_origins(fetch_all_refunds(
+        start_date=args.date, end_date=end, query_type="caseEnd"))
+    if args.raw or args.out:
+        text = json.dumps(summary, ensure_ascii=False, indent=2)
+        if args.out:
+            Path(args.out).write_text(text)
+            print(f"已写入 {args.out}", file=sys.stderr)
+        else:
+            print(text)
+        return
+    print(f"# 退款完结来源分析  {args.date}{' ~ ' + end if end != args.date else ''}")
+    print(f"# {summary['records']} 笔 / {summary['uniqueOrders']} 个订单，成功退款 "
+          f"{summary['refundRealAmt']:,.2f} 元\n")
+    print("## 退款场景")
+    for row in summary["scenes"]:
+        print(f"  {row['name']}: {row['count']} 笔，{row['amount']:,.2f} 元")
+    print("\n## 原订单付款日")
+    for row in summary["payDays"]:
+        print(f"  {row['date']}: {row['count']} 笔，{row['amount']:,.2f} 元")
+    print("\n## 从付款到退款完结")
+    for row in summary["ageBuckets"]:
+        print(f"  {row['name']}: {row['count']} 笔，{row['amount']:,.2f} 元")
+    print("\n注：这是退款事件归属；真实退货率还要用同一付款批次的支付订单/件数作分母，"
+          "并只保留“退货退款”，不能把未发货退款混进去。")
+
+
 def _fetch_cc_v2_scalar(path: str, *, start_date: str, end_date: str,
                           extra: dict[str, str] | None = None,
                           referer: str | None = None,
@@ -953,9 +1130,11 @@ def cmd_new_product_overview(args: argparse.Namespace) -> None:
     )
     if args.out:
         Path(args.out).write_text(json.dumps(data, ensure_ascii=False, indent=2))
-        print(f"已写入 {args.out}", file=sys.stderr); return
+        print(f"已写入 {args.out}", file=sys.stderr)
+        return
     if args.raw:
-        print(json.dumps(data, ensure_ascii=False, indent=2)); return
+        print(json.dumps(data, ensure_ascii=False, indent=2))
+        return
     d = data.get("data", {}) or {}
     self_ = d.get("self") or {}
     print(f"# 新品总览  {args.date}{' ~ ' + end if end != args.date else ''}  cateId={args.cate_id}")
@@ -974,9 +1153,11 @@ def cmd_new_product_trend(args: argparse.Namespace) -> None:
     )
     if args.out:
         Path(args.out).write_text(json.dumps(data, ensure_ascii=False, indent=2))
-        print(f"已写入 {args.out}", file=sys.stderr); return
+        print(f"已写入 {args.out}", file=sys.stderr)
+        return
     if args.raw:
-        print(json.dumps(data, ensure_ascii=False, indent=2)); return
+        print(json.dumps(data, ensure_ascii=False, indent=2))
+        return
     # trend 数据通常是按时间序列的 list 结构，直接 raw 提示
     print(f"# 新品趋势  {args.date}{' ~ ' + end if end != args.date else ''}  cateId={args.cate_id}")
     print("(趋势数据建议加 --raw 看完整 JSON)")
@@ -1499,7 +1680,7 @@ def cmd_fetch_recent(args: argparse.Namespace) -> None:
         "sessions": sessions,
     }
 
-    print(f"[3/3] 完成。", file=sys.stderr)
+    print("[3/3] 完成。", file=sys.stderr)
 
     if args.out:
         Path(args.out).write_text(json.dumps(out, ensure_ascii=False, indent=2))
@@ -1565,13 +1746,32 @@ def build_parser() -> argparse.ArgumentParser:
     # 命名子命令：每个高频页面一个
     for name, preset in LIST_PRESETS.items():
         sub = sp.add_parser(name, help=preset['desc'])
-        sub.add_argument("--date", default=yesterday, help=f"YYYY-MM-DD (默认昨天)")
+        sub.add_argument("--date", default=yesterday, help="YYYY-MM-DD (默认昨天)")
         sub.add_argument("--end-date", help="结束日期 (默认 = --date，做日维度查询)")
         sub.add_argument("--limit", type=int, default=10, help="拉多少条 (默认 10)")
         sub.add_argument("--page", type=int, default=1)
         sub.add_argument("--raw", action="store_true", help="输出原始 JSON")
         sub.add_argument("--out", help="输出到文件")
         sub.set_defaults(func=cmd_preset_list, preset_name=name)
+
+    ral = sp.add_parser("refund-all-list", help="全部退款明细：按申请/完结/原订单付款时间查询（只读）")
+    ral.add_argument("--date", default=yesterday, help="起始日 YYYY-MM-DD")
+    ral.add_argument("--end-date", help="结束日（默认 = --date）")
+    ral.add_argument("--by", choices=["case-end", "case-create", "order-pay"],
+                     default="case-end", help="时间口径（默认按退款完结时间）")
+    ral.add_argument("--limit", type=int, default=50)
+    ral.add_argument("--page", type=int, default=1)
+    ral.add_argument("--raw", action="store_true")
+    ral.add_argument("--out")
+    ral.set_defaults(func=cmd_refund_all_list)
+
+    roa = sp.add_parser("refund-origin-analysis",
+                        help="退款完结来源：追溯原订单付款日、退款场景和完结间隔（只读）")
+    roa.add_argument("--date", default=yesterday, help="退款完结起始日 YYYY-MM-DD")
+    roa.add_argument("--end-date", help="退款完结结束日（默认 = --date）")
+    roa.add_argument("--raw", action="store_true")
+    roa.add_argument("--out")
+    roa.set_defaults(func=cmd_refund_origin_analysis)
 
     # Excel 导出（一行搞定：触发 → 等 → 下载）
     # 只对有 bizCode 的 sycm-v1 接口可用（cc-v2 接口没有 async-excel 端点）
@@ -1590,7 +1790,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     # 商品大类专用：非 list 类接口
     npo = sp.add_parser("new-product-overview", help="新品总览 (商品/新品追踪 顶部汇总)")
-    npo.add_argument("--date", default=yesterday, help=f"YYYY-MM-DD (默认昨天)")
+    npo.add_argument("--date", default=yesterday, help="YYYY-MM-DD (默认昨天)")
     npo.add_argument("--end-date", help="结束日期 (默认 = --date)")
     npo.add_argument("--cate-id", type=int, default=0, help="品类 ID，0=全部 (默认 0)")
     npo.add_argument("--raw", action="store_true")
@@ -1598,7 +1798,7 @@ def build_parser() -> argparse.ArgumentParser:
     npo.set_defaults(func=cmd_new_product_overview)
 
     npt = sp.add_parser("new-product-trend", help="新品趋势 (商品/新品追踪 趋势图)")
-    npt.add_argument("--date", default=yesterday, help=f"YYYY-MM-DD (默认昨天)")
+    npt.add_argument("--date", default=yesterday, help="YYYY-MM-DD (默认昨天)")
     npt.add_argument("--end-date", help="结束日期 (默认 = --date)")
     npt.add_argument("--cate-id", type=int, default=0, help="品类 ID，0=全部 (默认 0)")
     npt.add_argument("--raw", action="store_true")
