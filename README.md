@@ -200,6 +200,23 @@ GET https://sycm.taobao.com/csp/api/detail/list
 ~/.claude/skills/sycm-cli/scripts/sycm.sh <subcommand> [args...]
 ```
 
+## 更新记录
+
+### v0.5（2026-07）
+- **首页「数据概览」多日表格 `home-table`**：一条命令拉页面「数据概览」四个 Tab 的完整 **32 项指标**（支付 10 / 意向 7 / 履约售后 10 / 推广 5），多日并排 + 每格「较上一周期」，等价于页面点「表格」那张多天对比表；字段中文名对页面逐格核对锁定。
+- **首页大盘只读命令**：`home-overview` / `home-trend` / `grow-factor`（支付/访客/转化/退款率/加购 + 广告引导/直播/新品/会员成交额三档对标）。
+- **多店铺登录态**：`export-profile <店名>` 保存、`--store <店名>` 切换、`profiles` 查看；一台机器管多个店，与 qianniu-cli 共用同一份 profile。
+- **退款商品明细 `refund-item-list`**：按款看退款金额 / 笔数 / 率 / 原因。
+- **菜单站点地图 `menu`**：读取当前账号完整菜单，便于继续定位页面/接口。
+- **Windows 跨平台认证**：首次运行自动打开专用 Chrome/Edge Profile，通过本机 CDP 读登录态，不动默认 Profile、不关浏览器安全保护。
+- 请求加固：网络错误 / HTTP 5xx 默认重试 2 次（`SYCM_RETRIES=N` 可调）。
+
+### v0.4
+- 商品大类（cc-v2 新接口）：商品排行 / 商品 360 / 品类 360 / 新品追踪。
+
+### v0.3
+- Excel 一键导出：`excel <preset>`，申请 → 排队 → 下载全自动。
+
 ## 法律与合规
 
 - 仅供商家**自己店铺**数据合规获取使用
