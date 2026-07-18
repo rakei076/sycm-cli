@@ -55,6 +55,8 @@ MAX_CONSECUTIVE_FAILS = 2
 #   达到 SOFT_WARN_AT 在 stderr 打一次温和提醒；不停止运行。
 #   如果你确实想加硬上限（比如脚本跑飞了想兜底），设环境变量 SYCM_REQUEST_LIMIT=数字。
 REQUEST_SOFT_WARN_AT = 200
+MAX_RETRIES = int(os.environ.get("SYCM_RETRIES", "2"))
+RETRY_BASE_SEC = float(os.environ.get("SYCM_RETRY_BASE_SEC", "1"))
 
 
 class RiskTriggered(RuntimeError):
@@ -228,16 +230,91 @@ def _windows_cdp_cookies() -> dict[str, str]:
     return _wait_for_windows_login(port, marker_file)
 
 
-def load_taobao_cookies() -> dict[str, str]:
-    """从 Chrome 读取 taobao 域所有 cookies。"""
+# ---------- 多店铺登录态（profile）----------
+# 与 qianniu-cli 共享同一目录，一份 profile 两个工具通用（都用 taobao.com 登录）。
+PROFILE_DIR = Path(
+    os.environ.get("TAOBAO_CLI_PROFILE_DIR", str(Path.home() / ".taobao-cli" / "profiles"))
+)
+
+# 由 main() 依据 --store 设置；非空时改读保存的 profile 而不是实时 Chrome。
+_ACTIVE_STORE: str | None = None
+
+
+def _profile_path(name: str) -> Path:
+    if not name or any(sep in name for sep in ("/", "\\", "..")) or name.startswith("."):
+        raise ValueError(f"store 名只能是简单名字，不含路径分隔符：{name!r}")
+    return PROFILE_DIR / f"{name}.json"
+
+
+def save_taobao_profile(name: str, cookies: dict[str, str]) -> Path:
+    """把一份 taobao 登录 cookie 存成命名 profile（0600，仅本机）。"""
+    PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        os.chmod(PROFILE_DIR, 0o700)
+    except OSError:
+        pass
+    path = _profile_path(name)
+    payload = {
+        "store": name,
+        "domain": "taobao.com",
+        "saved_at": datetime.now().isoformat(timespec="seconds"),
+        "cookies": cookies,
+    }
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
+    return path
+
+
+def load_taobao_profile(name: str) -> dict[str, str]:
+    path = _profile_path(name)
+    if not path.exists():
+        raise RuntimeError(
+            f"登录态 profile 不存在：{name}\n"
+            f"先在 Chrome 登录该店，再跑：sycm-cli export-profile {name}"
+        )
+    data = json.loads(path.read_text(encoding="utf-8"))
+    cookies = data.get("cookies") or {}
+    if "_tb_token_" not in cookies:
+        raise RuntimeError(
+            f"profile {name} 缺 _tb_token_（保存时可能未登录），请重新 export-profile。"
+        )
+    return cookies
+
+
+def list_taobao_profiles() -> list[dict[str, Any]]:
+    if not PROFILE_DIR.exists():
+        return []
+    out: list[dict[str, Any]] = []
+    for p in sorted(PROFILE_DIR.glob("*.json")):
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        out.append({
+            "store": p.stem,
+            "saved_at": data.get("saved_at"),
+            "cookies": data.get("cookies") or {},
+        })
+    return out
+
+
+def _read_chrome_taobao_cookies() -> dict[str, str]:
+    """始终从实时浏览器读 taobao 域 cookie（export-profile 用它，不受 --store 影响）。
+    Windows 走独立 Chrome/Edge 的 CDP，macOS 直读 browser_cookie3。"""
     if platform.system() == "Windows":
         return _windows_cdp_cookies()
-
     jar = browser_cookie3.chrome(domain_name="taobao.com")
-    cookies: dict[str, str] = {}
-    for c in jar:
-        if c.domain and "taobao.com" in c.domain:
-            cookies[c.name] = c.value
+    return {c.name: c.value for c in jar if c.domain and "taobao.com" in c.domain}
+
+
+def load_taobao_cookies() -> dict[str, str]:
+    """取当前应使用的登录态：--store 指定则读 profile，否则读实时浏览器（Windows 走 CDP）。"""
+    if _ACTIVE_STORE:
+        return load_taobao_profile(_ACTIVE_STORE)
+    cookies = _read_chrome_taobao_cookies()
     if not _has_login_cookie(cookies):
         raise RuntimeError(
             "未找到淘宝登录态。请在 Chrome 里打开并登录 sycm.taobao.com 后重试。"
@@ -253,6 +330,19 @@ def _check_risk(text: str) -> None:
 
 _request_count = 0
 _consecutive_fails = 0
+
+
+def _validate_business_response(payload: dict[str, Any]) -> None:
+    if payload.get("success") is False:
+        raise RuntimeError(
+            f"生意参谋业务失败 code={payload.get('code')}: "
+            f"{payload.get('message') or payload.get('msg') or ''}"
+        )
+    code = payload.get("code")
+    if code not in (None, 0, 200, "0", "200"):
+        raise RuntimeError(
+            f"生意参谋业务失败 code={code}: {payload.get('message') or payload.get('msg') or ''}"
+        )
 
 
 def _api_get(path: str, params: dict[str, Any], cookies: dict[str, str], referer: str | None = None) -> dict[str, Any]:
@@ -299,29 +389,41 @@ def _api_get(path: str, params: dict[str, Any], cookies: dict[str, str], referer
         "Accept-Language": "zh-CN,zh;q=0.9,ja;q=0.8,en;q=0.7",
     }
 
-    try:
-        resp = requests.get(
-            url, params=params, cookies=cookies, headers=headers,
-            impersonate="chrome120", timeout=15,
-        )
-        _request_count += 1
+    last_error: Exception | None = None
+    for attempt in range(MAX_RETRIES + 1):
+        try:
+            resp = requests.get(
+                url, params=params, cookies=cookies, headers=headers,
+                impersonate="chrome120", timeout=15,
+            )
+            _request_count += 1
+        except requests.exceptions.RequestException as e:
+            last_error = e
+            if attempt < MAX_RETRIES:
+                time.sleep(RETRY_BASE_SEC * (2 ** attempt))
+                continue
+            break
+
+        if resp.status_code >= 500 and attempt < MAX_RETRIES:
+            last_error = RuntimeError(f"HTTP {resp.status_code}")
+            time.sleep(RETRY_BASE_SEC * (2 ** attempt))
+            continue
         if resp.status_code != 200:
             _consecutive_fails += 1
-            if _consecutive_fails >= MAX_CONSECUTIVE_FAILS:
-                raise RuntimeError(
-                    f"连续 {MAX_CONSECUTIVE_FAILS} 次失败 (最后 HTTP {resp.status_code})，自动停止"
-                )
             raise RuntimeError(f"HTTP {resp.status_code}: {resp.text[:200]}")
         _check_risk(resp.text)
+        try:
+            payload = resp.json()
+        except Exception as e:
+            raise RuntimeError(f"响应非 JSON: {resp.text[:200]}") from e
+        _validate_business_response(payload)
         _consecutive_fails = 0
-        return resp.json()
-    except RiskTriggered:
-        raise
-    except Exception:
-        _consecutive_fails += 1
-        if _consecutive_fails >= MAX_CONSECUTIVE_FAILS:
-            raise RuntimeError(f"连续 {MAX_CONSECUTIVE_FAILS} 次失败，自动停止") from None
-        raise
+        return payload
+
+    _consecutive_fails += 1
+    raise RuntimeError(
+        f"请求失败，已重试 {MAX_RETRIES} 次: {last_error}"
+    ) from last_error
 
 
 # ---------- 高频页面预设注册表 ----------
@@ -396,6 +498,14 @@ LIST_PRESETS: dict[str, dict[str, Any]] = {
         "referer": "https://sycm.taobao.com/qos/service/frame/performance/detail/new",
         "desc": "慢响应明细 (服务/慢响应)",
         "show": ["dateId", "startTime", "endTime", "buyerNick", "psnNickName"],
+    },
+    "refund-item-list": {
+        "path": "shop/refund/item/list",
+        "orderBy": "itemCaseEndSucAmt",
+        "referer": "https://sycm.taobao.com/fa/refund/analysis",
+        "desc": "退款商品明细 (交易/退款分析)",
+        "show": ["itemId", "itemName", "itemCaseEndSucAmt", "itemCaseEndSucCnt",
+                 "itemCaseEndSucRate", "itemCaseEndSucReasonText"],
     },
 
     # ---- 商品大类 (cc-v2 风格接口) ----
@@ -738,6 +848,13 @@ def cmd_doctor(args: argparse.Namespace) -> None:
         for k in ("cna", "t", "_m_h5_tk", "thw"):
             if k in cookies:
                 print(f"✓ {k} = <present>")
+        yesterday = (date.today() - timedelta(days=1)).isoformat()
+        probe = fetch_preset(
+            "sale-shop-list", start_date=yesterday, end_date=yesterday,
+            page_no=1, page_size=1, cookies=cookies,
+        )
+        count = (probe.get("data") or {}).get("count")
+        print(f"✓ sale-shop-list probe = ok (count={count})")
     except Exception as e:
         print(f"✗ {e}")
         sys.exit(1)
@@ -871,6 +988,383 @@ def cmd_new_product_trend(args: argparse.Namespace) -> None:
             print(f"  {k}: {n} 项")
 
 
+def _fetch_live_guide(path: str, *, start_date: str, end_date: str,
+                      device: str, index_code: str, trend_type: str | None = None,
+                      cookies: dict[str, str] | None = None) -> dict[str, Any]:
+    """直播实时引导读取接口。
+
+    参数来自真实页面 HAR：dateRange/dateType/device/indexCode；趋势接口额外需要 type。
+    该接口没有分页：overview 是当前实时汇总，trend 返回 today/yesterday 两组趋势对象。
+    """
+    cookies = cookies or load_taobao_cookies()
+    params = {
+        "_": str(int(time.time() * 1000)),
+        "token": cookies.get("_tb_token_", ""),
+        "dateRange": f"{start_date}|{end_date}",
+        "dateType": "today" if start_date == end_date == date.today().isoformat() else "day",
+        "device": device,
+        "indexCode": index_code,
+    }
+    if trend_type is not None:
+        params["type"] = trend_type
+    return _api_get(path, params, cookies, referer="https://sycm.taobao.com/flow/live.htm")
+
+
+def _emit_json_or_file(data: dict[str, Any], args: argparse.Namespace) -> bool:
+    """处理所有命名读取命令的 --raw / --out；返回是否已经输出。"""
+    if args.out:
+        Path(args.out).write_text(json.dumps(data, ensure_ascii=False, indent=2))
+        print(f"已写入 {args.out}", file=sys.stderr)
+        return True
+    if args.raw:
+        print(json.dumps(data, ensure_ascii=False, indent=2))
+        return True
+    return False
+
+
+def cmd_live_guide_overview(args: argparse.Namespace) -> None:
+    """流量/直播实时引导 → 实时汇总卡（只读）。"""
+    end = args.end_date or args.date
+    data = _fetch_live_guide(
+        "/flow/new/live/guide/trend/overview.json", start_date=args.date, end_date=end,
+        device=args.device, index_code=args.index_code,
+    )
+    if _emit_json_or_file(data, args):
+        return
+    metrics = ((data.get("data") or {}).get("data") or {})
+    print(f"# 直播实时引导汇总  {args.date}{' ~ ' + end if end != args.date else ''}")
+    for key, value in metrics.items():
+        print(f"  {key}: {_value_of(value)}")
+
+
+def cmd_live_guide_trend(args: argparse.Namespace) -> None:
+    """流量/直播实时引导 → today/yesterday 趋势对象（只读）。"""
+    end = args.end_date or args.date
+    data = _fetch_live_guide(
+        "/flow/new/live/guide/trend.json", start_date=args.date, end_date=end,
+        device=args.device, index_code=args.index_code, trend_type=args.type,
+    )
+    if _emit_json_or_file(data, args):
+        return
+    periods = ((data.get("data") or {}).get("data") or {})
+    print(f"# 直播实时引导趋势  {args.date}{' ~ ' + end if end != args.date else ''}")
+    for period, values in periods.items():
+        keys = ", ".join(values.keys()) if isinstance(values, dict) else type(values).__name__
+        print(f"  {period}: {keys}")
+
+
+def cmd_preheating_metrics(args: argparse.Namespace) -> None:
+    """店铺/预热看板 → 当前可读指标卡（只读、无分页）。"""
+    cookies = load_taobao_cookies()
+    data = _api_get(
+        "/portal/shop/preheating/dashboard/metrics.json",
+        {"_": str(int(time.time() * 1000)), "token": cookies.get("_tb_token_", "")},
+        cookies,
+        referer="https://sycm.taobao.com/portal/shop/preheating.htm",
+    )
+    content = data.get("content") or {}
+    content_code = content.get("code")
+    if content_code not in (None, 0, 200, "0", "200"):
+        raise RuntimeError(f"生意参谋业务失败 code={content_code}: {content.get('message') or ''}")
+    if _emit_json_or_file(data, args):
+        return
+    print("# 店铺预热看板指标")
+    for key, value in (content.get("data") or {}).items():
+        print(f"  {key}: {_value_of(value)}")
+
+
+def _content_data_or_error(payload: dict[str, Any]) -> dict[str, Any]:
+    """处理 portal 接口的 {hasError, content:{code,data,message}} 响应包装。"""
+    content = payload.get("content") or {}
+    code = content.get("code")
+    if payload.get("hasError") is True or code not in (None, 0, 200, "0", "200"):
+        raise RuntimeError(f"生意参谋业务失败 code={code}: {content.get('message') or ''}")
+    data = content.get("data")
+    return data if isinstance(data, dict) else {"_value": data}
+
+
+def _fetch_order_portal(path: str, *, date_value: str,
+                        extra: dict[str, str] | None = None,
+                        cookies: dict[str, str] | None = None) -> dict[str, Any]:
+    """首页“客单”卡片的已验证 portal 读取接口。"""
+    cookies = cookies or load_taobao_cookies()
+    params = {
+        "_": str(int(time.time() * 1000)),
+        "token": cookies.get("_tb_token_", ""),
+        "dateType": "day",
+        "dateRange": f"{date_value}|{date_value}",
+    }
+    if extra:
+        params.update(extra)
+    return _api_get(path, params, cookies, referer="https://sycm.taobao.com/portal/home.htm")
+
+
+def cmd_order_overview(args: argparse.Namespace) -> None:
+    """首页/客单 → 连带率与平均购买件数汇总（只读）。"""
+    response = _fetch_order_portal("/portal/order/index/v2.json", date_value=args.date)
+    if _emit_json_or_file(response, args):
+        return
+    data = _content_data_or_error(response)
+    print(f"# 客单汇总  {args.date}")
+    for scope in ("my", "rivalAvg"):
+        values = data.get(scope) or {}
+        print(f"## {scope}")
+        for key, value in values.items():
+            print(f"  {key}: {_value_of(value)}")
+
+
+def cmd_order_trend(args: argparse.Namespace) -> None:
+    """首页/客单 → 截止日 30 日趋势（只读、接口固定窗口）。"""
+    response = _fetch_order_portal("/portal/order/indexTrend/v2.json", date_value=args.date)
+    if _emit_json_or_file(response, args):
+        return
+    data = _content_data_or_error(response)
+    print(f"# 客单趋势  截止 {args.date}（页面接口固定 30 日窗口）")
+    for scope in ("my", "rivalAvg"):
+        values = data.get(scope) or {}
+        detail = ", ".join(
+            f"{key}={len(value) if isinstance(value, list) else type(value).__name__}"
+            for key, value in values.items()
+        )
+        print(f"  {scope}: {detail}")
+
+
+def cmd_order_distribution(args: argparse.Namespace) -> None:
+    """首页/客单 → 买家客单价分布（只读、6 个价格带）。"""
+    response = _fetch_order_portal(
+        "/portal/order/distribute.json", date_value=args.date,
+        extra={"indexCode": "payOrderByrCnt"},
+    )
+    if _emit_json_or_file(response, args):
+        return
+    data = _content_data_or_error(response)
+    print(f"# 客单分布  截止 {args.date}（每价格带为固定 30 日序列）")
+    for band, series in data.items():
+        print(f"  {band}: {len(series) if isinstance(series, list) else type(series).__name__} 点")
+
+
+def cmd_order_recommend(args: argparse.Namespace) -> None:
+    """首页/客单 → 商品搭配推荐组合（只读、当前为固定推荐集）。"""
+    response = _fetch_order_portal(
+        "/portal/order/recommend.json", date_value=args.date,
+        extra={"page": "1", "pageSize": "10"},
+    )
+    if _emit_json_or_file(response, args):
+        return
+    data = _content_data_or_error(response).get("_value") or []
+    print(f"# 商品搭配推荐  {args.date}（共 {len(data)} 组；页面接口无可靠翻页）")
+    for i, row in enumerate(data, 1):
+        if not isinstance(row, dict):
+            continue
+        items = row.get("item") or []
+        titles = " + ".join(str(x.get("title") or "?")[:24] for x in items if isinstance(x, dict))
+        print(
+            f"  [{i:>2}] {titles} | commonBuy={_value_of(row.get('commBuyCnt'))} "
+            f"payAmt={_value_of(row.get('payAmt'))} items={len(items)}"
+        )
+
+
+def _print_board_scopes(data: dict[str, Any], scopes: tuple[str, ...] = ("self",)) -> None:
+    """打印首页 board 接口的对标档指标（self=本店 / rivalAvg=同行平均 / rivalGood=同行优秀）。"""
+    for scope in scopes:
+        values = data.get(scope)
+        if not isinstance(values, dict):
+            continue
+        print(f"## {scope}")
+        for key, value in values.items():
+            print(f"  {key}: {_value_of(value)}")
+
+
+def cmd_home_overview(args: argparse.Namespace) -> None:
+    """首页/数据概览 → 当日核心指标（支付金额/访客/转化率/退款额率/加购…，只读）。"""
+    response = _fetch_order_portal(
+        "/portal/coreIndex/new/overview/v3.json", date_value=args.date,
+        extra={"needCycleCrc": "true"},
+    )
+    if _emit_json_or_file(response, args):
+        return
+    data = _content_data_or_error(response)
+    print(f"# 首页数据概览  {args.date}（本店 self；每项 value=值 cycleCrc=环比）")
+    _print_board_scopes(data, ("self",))
+
+
+def cmd_home_trend(args: argparse.Namespace) -> None:
+    """首页/数据概览 → 截止日趋势（只读、接口固定窗口）。"""
+    response = _fetch_order_portal(
+        "/portal/coreIndex/new/trend/v3.json", date_value=args.date,
+    )
+    if _emit_json_or_file(response, args):
+        return
+    data = _content_data_or_error(response)
+    print(f"# 首页数据概览趋势  截止 {args.date}")
+    for scope in ("self", "rivalAvg"):
+        values = data.get(scope) or {}
+        detail = ", ".join(
+            f"{key}={len(value) if isinstance(value, list) else type(value).__name__}"
+            for key, value in values.items()
+        )
+        print(f"  {scope}: {detail}")
+
+
+def cmd_grow_factor(args: argparse.Namespace) -> None:
+    """首页/增长因子 → 广告引导/直播/新品/会员成交额（只读）。"""
+    response = _fetch_order_portal(
+        "/portal/board/grow/factor/overview.json", date_value=args.date,
+        extra={"device": "2"},
+    )
+    if _emit_json_or_file(response, args):
+        return
+    data = _content_data_or_error(response)
+    print(f"# 增长因子  {args.date}（本店 self；newPortalAdPayAmt=广告引导 "
+          f"portalLivePayAmt=直播 newItmPayAmt=新品 mbrPayAmt=会员）")
+    _print_board_scopes(data, ("self",))
+
+
+# 首页“数据概览”表格：字段 → 中文标签 + 分组 + 格式。
+# 2026-07-18：对着页面「数据概览」展开的完整 32 项(支付10/意向7/履约售后10/推广5)逐格锁定，
+# 中文名照抄页面，字段码用「较上一周期」百分比做唯一键反查确认。
+# fmt: amt=金额2位 / int=整数 / pct=百分比 / num=2位小数纯数值(单位在名字里)。取值走 self.<field>.value。
+HOME_TABLE_ROWS: tuple[tuple[str, str, str, str], ...] = (
+    # —— 支付 10 ——
+    ("支付",   "支付金额",          "payAmt",            "amt"),
+    ("支付",   "净支付金额",        "netPaymentAmount",  "amt"),
+    ("支付",   "访客数",            "uv",                "int"),
+    ("支付",   "支付买家数",        "payByrCnt",         "int"),
+    ("支付",   "支付转化率",        "payRate",           "pct"),
+    ("支付",   "浏览量",            "pv",                "int"),
+    ("支付",   "平均停留时长",      "stayTime",          "num"),
+    ("支付",   "支付子订单数",      "subPayOrdSubCnt",   "int"),
+    ("支付",   "支付件数",          "payItmCnt",         "int"),
+    ("支付",   "客单价",            "payPct",            "amt"),
+    # —— 意向 7 ——
+    ("意向",   "加购人数",          "cartByrCnt",        "int"),
+    ("意向",   "商品收藏人数",      "cltItmCnt",         "int"),
+    ("意向",   "加购件数",          "cartItemCnt",       "int"),
+    ("意向",   "老客复购金额",      "rePurchasePayAmount", "amt"),
+    ("意向",   "老客复购人数",      "payOldByrCnt",      "int"),
+    ("意向",   "老客复购率",        "hasPurchaseUbyCntRate", "pct"),
+    ("意向",   "咨询率",            "consultRate",       "pct"),
+    # —— 履约售后 10 ——
+    ("履约售后", "签收退款率",        "realPayrealRfdRate", "pct"),
+    ("履约售后", "退款金额(完结时间)", "rfdSucAmt",         "amt"),
+    ("履约售后", "退款金额(支付时间)", "payShopRfdAmt",     "amt"),
+    ("履约售后", "金额退款率",        "payAmtRfdRate",     "pct"),
+    ("履约售后", "订单退款率",        "ordRfdRate",        "pct"),
+    ("履约售后", "退款处理时长(天)",  "rfdFinshDur",       "num"),
+    ("履约售后", "旺旺人工响应时长(秒)", "wwReplyManualAvgTimeLen", "num"),
+    ("履约售后", "平台判责率",        "slrRespRate",       "pct"),
+    ("履约售后", "24小时揽收及时率",  "gotInTime24hRate",  "pct"),
+    ("履约售后", "物流到货时长(小时)", "avgSignTimeHh",     "num"),
+    # —— 推广 5 ——
+    ("推广",   "关键词推广费",      "p4pExpendAmt",      "amt"),
+    ("推广",   "精准人群推广费",    "cubeAmt",           "amt"),
+    ("推广",   "智能场景花费",      "feedCharge",        "amt"),
+    ("推广",   "全站推广花费",      "adStrategyAmt",     "amt"),
+    ("推广",   "淘宝客佣金",        "tkExpendAmt",       "amt"),
+)
+
+
+def _home_table_dates(start_date: str, end_date: str) -> list[str]:
+    """返回 start..end（含）的日期字符串，升序。"""
+    d0 = datetime.strptime(start_date, "%Y-%m-%d").date()
+    d1 = datetime.strptime(end_date, "%Y-%m-%d").date()
+    if d1 < d0:
+        d0, d1 = d1, d0
+    out, cur = [], d0
+    while cur <= d1:
+        out.append(cur.isoformat())
+        cur += timedelta(days=1)
+    return out
+
+
+def fetch_home_table(start_date: str, end_date: str, *,
+                     cookies: dict[str, str] | None = None) -> dict[str, dict[str, Any]]:
+    """逐日拉“数据概览”，返回 {日期: self 指标字典}（含 cycleCrc=较上一周期）。"""
+    cookies = cookies or load_taobao_cookies()
+    result: dict[str, dict[str, Any]] = {}
+    for day in _home_table_dates(start_date, end_date):
+        resp = _fetch_order_portal(
+            "/portal/coreIndex/new/overview/v3.json", date_value=day,
+            extra={"needCycleCrc": "true"}, cookies=cookies,
+        )
+        result[day] = _content_data_or_error(resp).get("self") or {}
+    return result
+
+
+def _fmt_home_value(value: Any, fmt: str) -> str:
+    if value is None:
+        return "-"
+    if fmt == "pct":
+        return f"{value * 100:.2f}%"
+    if fmt == "amt":
+        return f"{value:,.2f}"
+    if fmt == "int":
+        return f"{int(value):,}"
+    if fmt == "num":
+        return f"{value:,.2f}"
+    return str(value)
+
+
+def _home_cell(field_obj: Any, fmt: str, *, show_crc: bool) -> str:
+    """一个格子：值 [+较上一周期%]。field_obj 形如 {value, cycleCrc}。"""
+    value = field_obj.get("value") if isinstance(field_obj, dict) else field_obj
+    text = _fmt_home_value(value, fmt)
+    if show_crc and isinstance(field_obj, dict) and field_obj.get("cycleCrc") is not None:
+        crc = field_obj["cycleCrc"] * 100
+        text += f" {crc:+.1f}%"
+    return text
+
+
+def cmd_home_table(args: argparse.Namespace) -> None:
+    """首页/数据概览 → 多日并排表格（支付/意向/推广/售后退款，值+较上一周期，只读）。"""
+    table = fetch_home_table(args.date, args.end_date)
+    if args.raw:
+        payload = {"data": table}
+        if args.out:
+            with open(args.out, "w", encoding="utf-8") as fh:
+                json.dump(payload, fh, ensure_ascii=False, indent=2)
+            print(f"已写入 {args.out}")
+        else:
+            print(json.dumps(payload, ensure_ascii=False, indent=2))
+        return
+
+    days = sorted(table, reverse=True)  # 最新在左，对齐页面
+    show_crc = not args.no_crc
+    lines: list[str] = [
+        f"# 数据概览  {min(table) if table else '?'} → {max(table) if table else '?'}"
+        f"（列=日期，最新在左{'；括号=较上一周期' if show_crc else ''}）"
+    ]
+    label_w = max((len(lbl) for _, lbl, _, _ in HOME_TABLE_ROWS), default=8) * 2
+    cells: dict[tuple[str, str], list[str]] = {}
+    for _grp, label, field, fmt in HOME_TABLE_ROWS:
+        cells[(label, field)] = [
+            _home_cell(table.get(d, {}).get(field), fmt, show_crc=show_crc) for d in days
+        ]
+    col_w = max(
+        [len(d[5:]) for d in days]
+        + [len(c) for row in cells.values() for c in row]
+        + [10],
+    )
+    header = "指标".ljust(label_w) + "".join(d[5:].rjust(col_w + 1) for d in days)
+    lines.append(header)
+    last_group = None
+    for grp, label, field, _fmt in HOME_TABLE_ROWS:
+        if grp != last_group:
+            lines.append(f"【{grp}】")
+            last_group = grp
+        pad = label_w - len(label) * 2
+        row = label + " " * max(pad, 1)
+        row += "".join(c.rjust(col_w + 1) for c in cells[(label, field)])
+        lines.append(row)
+    text = "\n".join(lines)
+    if args.out:
+        with open(args.out, "w", encoding="utf-8") as fh:
+            fh.write(text + "\n")
+        print(f"已写入 {args.out}")
+    else:
+        print(text)
+
+
 def cmd_api(args: argparse.Namespace) -> None:
     """通用 API 探测命令：sycm-cli api <path> --param key=val ..."""
     cookies = load_taobao_cookies()
@@ -886,6 +1380,56 @@ def cmd_api(args: argparse.Namespace) -> None:
         params[k] = v
     data = _api_get(args.path, params, cookies, referer=args.referer)
     print(json.dumps(data, ensure_ascii=False, indent=2))
+
+
+def _flatten_menu(value: Any) -> list[dict[str, Any]]:
+    found: dict[int, dict[str, Any]] = {}
+
+    def walk(node: Any) -> None:
+        if isinstance(node, dict):
+            if "menuId" in node and "menuName" in node:
+                found[int(node["menuId"])] = {
+                    "menuId": int(node["menuId"]),
+                    "parentId": int(node.get("parentId") or 0),
+                    "menuName": node.get("menuName") or "",
+                    "menuPath": node.get("menuPath") or "",
+                    "isVisible": node.get("isVisible") or "",
+                    "menuOrder": node.get("menuOrder"),
+                }
+            for child in node.values():
+                walk(child)
+        elif isinstance(node, list):
+            for child in node:
+                walk(child)
+
+    walk(value)
+    return list(found.values())
+
+
+def cmd_menu(args: argparse.Namespace) -> None:
+    cookies = load_taobao_cookies()
+    data = _api_get(
+        "/oneauth/api/getMenuV2.json",
+        {"_": str(int(time.time() * 1000)), "token": cookies.get("_tb_token_", "")},
+        cookies,
+        referer="https://sycm.taobao.com/portal/home.htm",
+    )
+    rows = _flatten_menu(data)
+    if not args.all:
+        rows = [r for r in rows if r["isVisible"] == "y"]
+    rows.sort(key=lambda r: (r["parentId"], r["menuOrder"] or 0, r["menuId"]))
+    if args.raw or args.out:
+        payload = {"count": len(rows), "menus": rows}
+        out = json.dumps(payload, ensure_ascii=False, indent=2)
+        if args.out:
+            Path(args.out).write_text(out)
+            print(f"已写入 {args.out}", file=sys.stderr)
+        else:
+            print(out)
+        return
+    print(f"# 生意参谋菜单  共 {len(rows)} 项" + ("（含隐藏）" if args.all else "（可见）"))
+    for row in rows:
+        print(f"{row['menuId']}\t{row['parentId']}\t{row['menuName']}\t{row['menuPath']}")
 
 
 def cmd_detail(args: argparse.Namespace) -> None:
@@ -969,10 +1513,21 @@ def cmd_fetch_recent(args: argparse.Namespace) -> None:
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="sycm-cli", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
+    # 顶层 --store：用保存的登录态而不是实时 Chrome。放在子命令前，如
+    # sycm-cli --store 示例主店 sale-shop-list
+    p.add_argument("--store", metavar="店名",
+                   help="用 export-profile 保存的登录态（放在子命令前），而不是实时 Chrome")
     sp = p.add_subparsers(dest="cmd", required=True)
 
     d = sp.add_parser("doctor", help="检查 cookie / 登录态")
     d.set_defaults(func=cmd_doctor)
+
+    ep_ = sp.add_parser("export-profile", help="把当前 Chrome 登录态存成命名 profile（多店铺）")
+    ep_.add_argument("name", help="店名 / profile 名，如 示例主店")
+    ep_.set_defaults(func=cmd_export_profile)
+
+    pf = sp.add_parser("profiles", help="列出已保存的登录态 profile")
+    pf.set_defaults(func=cmd_profiles)
 
     today = date.today().isoformat()
     yesterday = (date.today() - timedelta(days=1)).isoformat()
@@ -1000,6 +1555,12 @@ def build_parser() -> argparse.ArgumentParser:
     ap.add_argument("--param", "-p", action="append", help="附加参数 key=value，可重复")
     ap.add_argument("--referer", help="自定义 Referer 头")
     ap.set_defaults(func=cmd_api)
+
+    mn = sp.add_parser("menu", help="拉取当前生意参谋完整菜单地图")
+    mn.add_argument("--all", action="store_true", help="包含隐藏菜单")
+    mn.add_argument("--raw", action="store_true", help="输出结构化 JSON")
+    mn.add_argument("--out", help="写入文件")
+    mn.set_defaults(func=cmd_menu)
 
     # 命名子命令：每个高频页面一个
     for name, preset in LIST_PRESETS.items():
@@ -1044,20 +1605,119 @@ def build_parser() -> argparse.ArgumentParser:
     npt.add_argument("--out", help="输出到文件")
     npt.set_defaults(func=cmd_new_product_trend)
 
+    # 已由 HAR + 实时响应闭环验证的店铺/流量读取叶子。
+    for name, help_text, func in (
+        ("live-guide-overview", "直播实时引导汇总卡（只读）", cmd_live_guide_overview),
+        ("live-guide-trend", "直播实时引导 today/yesterday 趋势（只读）", cmd_live_guide_trend),
+    ):
+        lg = sp.add_parser(name, help=help_text)
+        lg.add_argument("--date", default=today, help=f"YYYY-MM-DD（默认今天 {today}）")
+        lg.add_argument("--end-date", help="结束日期（默认 = --date）")
+        lg.add_argument("--device", default="0", help="设备：0=全端（页面实际参数，默认 0）")
+        lg.add_argument("--index-code", default="uv,itmUv,payByrCnt",
+                        help="逗号分隔的指标代码（默认 uv,itmUv,payByrCnt）")
+        if name == "live-guide-trend":
+            lg.add_argument("--type", default="1", help="趋势类型（页面实际参数，默认 1）")
+        lg.add_argument("--raw", action="store_true", help="输出原始 JSON")
+        lg.add_argument("--out", help="输出到文件")
+        lg.set_defaults(func=func)
+
+    ph = sp.add_parser("preheating-metrics", help="店铺预热看板当前指标（只读）")
+    ph.add_argument("--raw", action="store_true", help="输出原始 JSON")
+    ph.add_argument("--out", help="输出到文件")
+    ph.set_defaults(func=cmd_preheating_metrics)
+
+    for name, help_text, func in (
+        ("order-overview", "首页客单：连带率与平均购买件数汇总（只读）", cmd_order_overview),
+        ("order-trend", "首页客单：截至指定日的 30 日趋势（只读）", cmd_order_trend),
+        ("order-distribution", "首页客单：买家客单价分布（只读）", cmd_order_distribution),
+        ("order-recommend", "首页客单：商品搭配推荐组合（只读、固定推荐集）", cmd_order_recommend),
+    ):
+        sub = sp.add_parser(name, help=help_text)
+        sub.add_argument("--date", default=yesterday, help=f"截止日 YYYY-MM-DD（默认昨天 {yesterday}）")
+        sub.add_argument("--raw", action="store_true", help="输出原始 JSON")
+        sub.add_argument("--out", help="输出到文件")
+        sub.set_defaults(func=func)
+
+    for name, help_text, func in (
+        ("home-overview", "首页数据概览：支付金额/访客/转化率/退款额率/加购（按日，只读）", cmd_home_overview),
+        ("home-trend", "首页数据概览趋势（按日固定窗口，只读）", cmd_home_trend),
+        ("grow-factor", "首页增长因子：广告引导/直播/新品/会员成交额（按日，只读）", cmd_grow_factor),
+    ):
+        sub = sp.add_parser(name, help=help_text)
+        sub.add_argument("--date", default=yesterday, help=f"日期 YYYY-MM-DD（默认昨天 {yesterday}）")
+        sub.add_argument("--raw", action="store_true", help="输出原始 JSON")
+        sub.add_argument("--out", help="输出到文件")
+        sub.set_defaults(func=func)
+
+    six_days_ago = (date.today() - timedelta(days=6)).isoformat()
+    ht = sp.add_parser(
+        "home-table",
+        help="首页数据概览多日表格：支付/意向/推广/售后退款并排 + 较上一周期（只读）",
+    )
+    ht.add_argument("--date", default=six_days_ago,
+                    help=f"起始日 YYYY-MM-DD（默认 6 天前 {six_days_ago}）")
+    ht.add_argument("--end-date", default=yesterday, dest="end_date",
+                    help=f"结束日 YYYY-MM-DD（默认昨天 {yesterday}）")
+    ht.add_argument("--no-crc", action="store_true", dest="no_crc",
+                    help="不显示较上一周期（默认显示）")
+    ht.add_argument("--raw", action="store_true", help="输出原始 JSON（每日全字段）")
+    ht.add_argument("--out", help="输出到文件")
+    ht.set_defaults(func=cmd_home_table)
+
     return p
 
 
+def cmd_export_profile(args: argparse.Namespace) -> None:
+    """把当前 Chrome 的 taobao 登录态存成命名 profile，供 --store 复用。"""
+    cookies = _read_chrome_taobao_cookies()
+    if "_tb_token_" not in cookies:
+        raise RuntimeError(
+            "当前 Chrome 未检测到 taobao 登录态。请先在浏览器登录该店的 "
+            "sycm.taobao.com，等首页加载完再 export。"
+        )
+    path = save_taobao_profile(args.name, cookies)
+    print(f"✓ 已保存登录态 '{args.name}' → {path}")
+    print(f"  含 {len(cookies)} 个 cookie。用法：sycm-cli --store {args.name} <命令>")
+    print("  该文件含长效登录凭据(权限 0600)；勿提交 git、勿外发。")
+    print("  提示：qianniu-cli 也读同一目录，这份 profile 两个工具通用。")
+
+
+def cmd_profiles(args: argparse.Namespace) -> None:
+    """列出已保存的登录态 profile 及新鲜度。"""
+    profiles = list_taobao_profiles()
+    if not profiles:
+        print(f"（暂无 profile。目录：{PROFILE_DIR}）")
+        print("保存：在 Chrome 登录某店后跑 sycm-cli export-profile <店名>")
+        return
+    print(f"已保存 {len(profiles)} 个登录态（{PROFILE_DIR}）：")
+    now = datetime.now()
+    for p in profiles:
+        h5tk = (p["cookies"] or {}).get("_m_h5_tk", "")
+        fresh = "?"
+        _, _, expire = h5tk.partition("_")
+        if expire.isdigit():
+            left = int(int(expire) / 1000 - now.timestamp())
+            fresh = "登录态新鲜" if left > 60 else "h5token 过期(sycm 用 _tb_token_ 仍可用)"
+        print(f"  - {p['store']:<16} 保存于 {p.get('saved_at') or '?'}  [{fresh}]")
+
+
 def main() -> None:
+    global _ACTIVE_STORE
     # 中文 Windows 的 cmd/SSH 常为 GBK；帮助文本里的 emoji 不应让 CLI 崩溃。
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
             stream.reconfigure(errors="replace")
     args = build_parser().parse_args()
+    _ACTIVE_STORE = getattr(args, "store", None)
     try:
         args.func(args)
     except RiskTriggered as e:
         print(f"\n⚠️  风险信号触发，已停止：{e}", file=sys.stderr)
         sys.exit(2)
+    except (RuntimeError, ValueError) as e:
+        print(f"✗ {e}", file=sys.stderr)
+        sys.exit(1)
     except KeyboardInterrupt:
         print("\n中断", file=sys.stderr)
         sys.exit(130)

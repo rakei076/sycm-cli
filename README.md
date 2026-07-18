@@ -122,6 +122,7 @@ Windows 启动器会优先使用 `uv`；否则使用 Python 3，并自动安装�
 | `fetch-recent --date YYYY-MM-DD --limit N` | **主力**：列表 + 全部详情，给 AI 用 |
 | `reception-list` / `evaluation-list` / `inquiry-loss-list` / `slow-rsps-list` / `sale-cs-list` | 客服与服务高频 API |
 | `sale-shop-list` / `sale-item-list` | 交易与商品销售 API |
+| `refund-item-list` | 退款商品明细（按款退款金额/笔数/率/原因） |
 | `excel <preset>` | 一行命令导出对应数据为 Excel（自动触发→排队→下载）|
 
 ### 商品大类（v0.4+，新 cc-v2 接口）
@@ -136,7 +137,10 @@ Windows 启动器会优先使用 `uv`；否则使用 Python 3，并自动安装�
 ### 通用工具
 | 子命令 | 用途 |
 |---|---|
+| `menu [--all] [--raw]` | 读取当前账号的生意参谋菜单，作为页面/接口继续枚举的站点地图 |
 | `api <path> -p k=v` | 通用 API 探测器，调任何 sycm 接口 |
+
+网络错误和 HTTP 5xx 默认最多重试 2 次；可用 `SYCM_RETRIES=N` 调整。业务错误会返回非零退出码。
 
 详细 schema、字段定义、参数风格区别（sycm-v1 vs cc-v2）见 [SKILL.md](SKILL.md)。
 

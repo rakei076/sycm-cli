@@ -101,6 +101,52 @@ sycm-cli new-product-trend --date YYYY-MM-DD --raw        # 趋势
 
 **字段值是嵌套对象，加 `--raw` 才能拿到对比指标**（cycleCrc=环比、syncCrc=同比）。摘要模式只显示 `.value`。
 
+### 首页大盘 (v0.5+) —— 数据概览 / 增长因子（老板每天看的那块）
+
+sycm **首页 `/portal/home.htm`** 顶部那块官方口径大盘，独立的 `/portal/...` 只读 GET，返回 `self`(本店)/`rivalAvg`(同行平均)/`rivalGood`(同行优秀) 三档对标。均接 `--date YYYY-MM-DD --raw --out file`。
+
+| 子命令 | 对应板块 | 关键字段 |
+|---|---|---|
+| `home-overview` | 首页/数据概览（按日） | payAmt(支付金额)、netPaymentAmount(净支付)、uv(访客)、payByrCnt(支付买家)、payRate(转化率)、rfdSucAmt(退款额)、payAmtRfdRate(金额退款率)、cartByrCnt(加购)、buyAmtRatio(复购占比) |
+| `home-table` | 首页/数据概览「表格」视图（多日并排） | 支付/意向/履约售后/推广 4 组完整 32 项 + 每格较上一周期，就是页面点「表格」那张多天对比表 |
+| `home-trend` | 首页/数据概览趋势（按日固定窗口） | 同上字段的时序数组 |
+| `grow-factor` | 首页/增长因子 | newPortalAdPayAmt(广告引导成交)、portalLivePayAmt(直播)、newItmPayAmt(新品)、mbrPayAmt(会员)、totalPromoSpend、tROI |
+
+```bash
+sycm-cli home-overview --date YYYY-MM-DD          # 昨天的支付/访客/转化/退款率/加购
+sycm-cli home-table    --date 起始 --end-date 结束  # 多日并排大表(默认最近6天)，含较上一周期
+sycm-cli grow-factor   --date YYYY-MM-DD           # 广告引导/直播/新品/会员各贡献多少成交
+sycm-cli home-overview --date YYYY-MM-DD --raw     # 拿全 self/rivalAvg/rivalGood + cycleCrc 环比
+```
+
+指标值是 `{value, cycleCrc}` 结构，摘要模式显示值，`--raw` 拿环比。**用"日"口径取稳定汇总，别用实时(实时数据盘中会跳)。**
+
+`home-table` 已收**页面「数据概览」完整 32 项**（支付10/意向7/履约售后10/推广5），中文名照抄页面、字段码用「较上一周期」百分比做唯一键反查锁定（2026-07-18 对全展开截图逐格核对，全中）。默认显示较上一周期，`--no-crc` 关掉；`--raw` 出每日全 62 字段 JSON。
+
+易错字段码对照（都踩过坑/靠 crc 反查才定的，别再猜）：
+- 推广费：关键词=`p4pExpendAmt` / 精准人群=**`cubeAmt`**(非 zzExpendAmt) / 智能场景=`feedCharge` / 全站=`adStrategyAmt` / 淘宝客=`tkExpendAmt`
+- 退款：签收退款率=**`realPayrealRfdRate`**(≈个位数%，非 `sucRefundRate`≈65%) / 金额退款率=`payAmtRfdRate` / 订单退款率=`ordRfdRate` / 退款处理时长(天)=`rfdFinshDur`
+- 老客：复购金额=`rePurchasePayAmount`(=olderPayAmt 同值) / 复购人数=`payOldByrCnt`(=hasPurchasedUbyCnt 同值) / 复购率=`hasPurchaseUbyCntRate`
+- 其他：客单价=`payPct`(=支付金额/支付买家数) / 支付子订单数=`subPayOrdSubCnt` / 平均停留时长=`stayTime` / 旺旺人工响应时长(秒)=`wwReplyManualAvgTimeLen` / 平台判责率=`slrRespRate` / 物流到货时长(小时)=`avgSignTimeHh` / 24小时揽收及时率=`gotInTime24hRate` / 咨询率=`consultRate`
+
+**为什么靠 crc 反查而不是扒前端字典**：接口(overview / getTableData)只回英文字段码+数值，中文名在首页子应用 `op-home`(诊出版本 2.1.54)前端里，其 CDN 包名由 diamond 运行时拼、猜不到(试了 8 种 aligenius/* 全 404)，Claude 自己浏览器没登录跑不了那段配置。最终靠用户发的完整截图 + 「较上一周期」百分比唯一键，把 32 个中文名逐个锁到字段码。
+
+### 多店铺登录态（v0.5+）—— 一台机器管多个店
+
+默认读实时 Chrome 的登录态（单店）。要管多个店，把每个店的登录态存成命名 profile：
+
+```bash
+# 1. 在 Chrome 登录 A 店的 sycm，存下来
+sycm-cli export-profile 示例主店
+# 2. 之后任何命令加 --store 切换（放在子命令前）
+sycm-cli --store 示例主店 home-overview --date YYYY-MM-DD
+sycm-cli profiles                    # 看已存哪些店 + 新鲜度
+```
+
+- profile 存在 `~/.taobao-cli/profiles/`(0600 权限，含长效登录凭据，**勿提交 git**)。
+- **qianniu-cli 读同一目录，一份 profile 两个工具通用**（都用 taobao.com 登录）。
+- 长效 cookie 失效（几周）后，重新在浏览器登录该店再 `export-profile` 一次即可。
+
 ### Excel 一键下载（v0.3+）—— 商品数据 / 评价 / 销售等导出
 
 任何上面的 list preset 都能用 `excel` 子命令**一行下载 Excel 文件**到本地（默认 `~/Downloads/sycm-exports/`）。
