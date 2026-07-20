@@ -26,3 +26,6 @@ venv/
 .env
 .env.*
 *.key
+
+# 隐私敏感词表(本地专用)
+.privacy-words

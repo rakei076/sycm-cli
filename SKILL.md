@@ -377,11 +377,41 @@ uv run --with browser-cookie3 --with curl-cffi python ~/.claude/skills/sycm-cli/
 2. 过滤 messages 里包含"穿什么码 / 身高 / 体重 / XL / L 码"等关键词的会话
 3. 分析每个会话客服推荐的尺码合理性，输出报告
 
+## 字段字典与发现方法论（v0.6+，AI 取数主力走这里）
+
+**主力不是背命令，是查字典。** 仓库根目录 `fields.json` 是机器可读字段字典，每条 = `字段码 → {cn 中文名, scope 适用命令, fmt 格式, status, note 口径备注}`。数据概览 62 个原始字段全部入册（32 个已破译 `verified` + 30 个中文名待破译 `candidate`）。
+
+**标准取数动线：**
+1. **先读 `fields.json`** 找字段码 + 它的 `note`（口径警告）
+2. **用 `--fields` 选列取数**：`home-table --fields payAmt,uv,payRate --date 起 --end-date 止`；想要 62 个全字段用 `--all-fields`
+3. 预设命令（`home-overview`/`home-table` 等）只是常用查询的快捷方式，不是唯一入口
+
+`status: candidate` 的字段中文名尚未破译（`cn` 暂等于字段码），用前先验证；`note` 里的口径警告**必须遵守**（见下方坑规矩）。
+
+### 发现方法论三招（字典里没有的字段，按成本从低到高）
+
+1. **翻响应自带元数据**：sycm 列表类接口（`refund-item-list` 等）响应 `data.columns` **自带字段码+中文名**，`--raw` 拉一次全收 —— 这是 sycm 侧最省事的一招。
+2. **`queryFieldIn` 试探**（姊妹 CLI alimama 侧）：候选字段码塞进请求，返回带值=接口认，试错零损失。
+3. **网页对照**：登录网页找到目标指标，拿网页显示的数值/百分比当答案纸，`--raw` 全量拉回后按数值反查字段码。数据概览 32 项就是用**较上一周期百分比（cycleCrc）对照法**逐格锁定的。
+
+### 写回规矩（越用字典越厚）
+
+三招探出新字段并**实测核准后**，必须把 `candidate` 升级为 `verified` 写回 `fields.json`（`cn` 填真中文名，`note` 附验证日期与方法）；试探失败的记 `rejected`。**`fields.json` 永不含真实数值/店名**，可进公共库。
+
+### 坑规矩（口径警告，写数前必看）
+
+- **退款率（支付时间口径，`payAmtRfdRate`/`ordRfdRate`/`payShopRfdAmt`）**：近 7 天数值仍在爬升（实测 T-6 仍未长完），**分析禁止用近 7 天下结论**。看真实退货率要等旧日期结算，或用店主自己的现金回收账本。
+- **签收退款率（`realPayrealRfdRate`）**：**T-3 才出值，两周以上才稳定**，近几天显示 `-` 是正常的。
+
+> 配套工具：**alimama-cli**（万相台广告投放数据）同样有 `fields.json` 字典 + 三招方法论，店铺体检 + 广告复盘两个一起用。
+
+---
+
 ## 故障排查
 
 | 现象 | 原因 | 处理 |
 |---|---|---|
-| `doctor` 报"未找到淘宝登录态" | Chrome 没登录 sycm 或被另一个 Chrome 锁定 cookie 文件 | 打开 Chrome 登录 sycm.taobao.com 一次 |
+| `doctor` 报"未找到淘宝登录态" | Chrome 没登录 sycm 或被另一个 Chrome 锁定 cookie 文件 | 打开 Chrome 登录 sycm.taobao.com 一次；登录态在别的 Chrome 身份时设 `SYCM_CHROME_PROFILE="Profile 1"` |
 | `list` 返回 0 条 | 漏传 `orderBy=startTime` 参数 | CLI 已内置，正常情况不会遇到 |
 | `RiskTriggered: 滑块` | sycm 触发风控 | 立即停 24 小时，不要重试 |
 | HTTP 5810 | session 超时 | 重新打开 Chrome 登录 sycm |

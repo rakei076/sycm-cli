@@ -314,12 +314,22 @@ def list_taobao_profiles() -> list[dict[str, Any]]:
     return out
 
 
+def _chrome_cookie_file() -> str | None:
+    """若设了 SYCM_CHROME_PROFILE（如 "Profile 1"），返回该 Chrome 身份的 Cookies 文件路径；
+    未设则返回 None，browser_cookie3 走默认身份不变。"""
+    prof = os.environ.get("SYCM_CHROME_PROFILE")
+    if not prof:
+        return None
+    p = Path.home() / "Library/Application Support/Google/Chrome" / prof / "Cookies"
+    return str(p)
+
+
 def _read_chrome_taobao_cookies() -> dict[str, str]:
     """始终从实时浏览器读 taobao 域 cookie（export-profile 用它，不受 --store 影响）。
     Windows 走独立 Chrome/Edge 的 CDP，macOS 直读 browser_cookie3。"""
     if platform.system() == "Windows":
         return _windows_cdp_cookies()
-    jar = browser_cookie3.chrome(domain_name="taobao.com")
+    jar = browser_cookie3.chrome(domain_name="taobao.com", cookie_file=_chrome_cookie_file())
     return {c.name: c.value for c in jar if c.domain and "taobao.com" in c.domain}
 
 
@@ -331,6 +341,7 @@ def load_taobao_cookies() -> dict[str, str]:
     if not _has_login_cookie(cookies):
         raise RuntimeError(
             "未找到淘宝登录态。请在 Chrome 里打开并登录 sycm.taobao.com 后重试。"
+            '若登录态在别的 Chrome 身份，设 SYCM_CHROME_PROFILE="Profile 1" 重试。'
         )
     return cookies
 
@@ -1445,6 +1456,25 @@ HOME_TABLE_ROWS: tuple[tuple[str, str, str, str], ...] = (
 )
 
 
+# ---------- 字段字典 ----------
+#
+# fields.json：机器可读字段字典（字段码 -> 中文名/适用范围/展示格式/核验状态/备注）。
+# 启动时加载一次；文件缺失或损坏不崩，退回空字典并在 stderr 提醒。
+FIELDS_PATH = Path(__file__).resolve().parent / "fields.json"
+
+
+def load_fields_dict() -> dict[str, dict]:
+    """字段字典；缺失/损坏不崩，退回空字典并提醒。"""
+    try:
+        return json.loads(FIELDS_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        print(f"⚠️ fields.json 不可用({e}),退回内置字段表", file=sys.stderr)
+        return {}
+
+
+FIELDS_DICT = load_fields_dict()
+
+
 def _home_table_dates(start_date: str, end_date: str) -> list[str]:
     """返回 start..end（含）的日期字符串，升序。"""
     d0 = datetime.strptime(start_date, "%Y-%m-%d").date()
@@ -1496,6 +1526,24 @@ def _home_cell(field_obj: Any, fmt: str, *, show_crc: bool) -> str:
     return text
 
 
+def _field_row_for_code(code: str) -> tuple[str, str, str]:
+    """(中文标签, 字段码, fmt)：verified/candidate 有字典项就用字典，没有就退回字段码本身 + fmt=num。"""
+    entry = FIELDS_DICT.get(code)
+    if entry:
+        return entry.get("cn", code), code, entry.get("fmt", "num")
+    return code, code, "num"
+
+
+def _all_fields_rows() -> list[tuple[str, str, str, str]]:
+    """--all-fields 用：verified 按 HOME_TABLE_ROWS 原顺序分组在前，candidate 追加到【未破译】组。"""
+    rows = list(HOME_TABLE_ROWS)
+    verified_codes = {code for _grp, _label, code, _fmt in HOME_TABLE_ROWS}
+    for code, entry in FIELDS_DICT.items():
+        if entry.get("status") == "candidate" and code not in verified_codes:
+            rows.append(("未破译", entry.get("cn", code), code, entry.get("fmt", "num")))
+    return rows
+
+
 def cmd_home_table(args: argparse.Namespace) -> None:
     """首页/数据概览 → 多日并排表格（支付/意向/推广/售后退款，值+较上一周期，只读）。"""
     table = fetch_home_table(args.date, args.end_date)
@@ -1509,15 +1557,28 @@ def cmd_home_table(args: argparse.Namespace) -> None:
             print(json.dumps(payload, ensure_ascii=False, indent=2))
         return
 
+    fields_arg = getattr(args, "fields", None)
+    grouped = True
+    if fields_arg:
+        codes = [c.strip() for c in fields_arg.split(",") if c.strip()]
+        rows: list[tuple[str, str, str, str]] = [
+            ("", *_field_row_for_code(code)) for code in codes
+        ]
+        grouped = False
+    elif getattr(args, "all_fields", False):
+        rows = _all_fields_rows()
+    else:
+        rows = list(HOME_TABLE_ROWS)
+
     days = sorted(table, reverse=True)  # 最新在左，对齐页面
     show_crc = not args.no_crc
     lines: list[str] = [
         f"# 数据概览  {min(table) if table else '?'} → {max(table) if table else '?'}"
         f"（列=日期，最新在左{'；括号=较上一周期' if show_crc else ''}）"
     ]
-    label_w = max((len(lbl) for _, lbl, _, _ in HOME_TABLE_ROWS), default=8) * 2
+    label_w = max((len(lbl) for _, lbl, _, _ in rows), default=8) * 2
     cells: dict[tuple[str, str], list[str]] = {}
-    for _grp, label, field, fmt in HOME_TABLE_ROWS:
+    for _grp, label, field, fmt in rows:
         cells[(label, field)] = [
             _home_cell(table.get(d, {}).get(field), fmt, show_crc=show_crc) for d in days
         ]
@@ -1529,8 +1590,8 @@ def cmd_home_table(args: argparse.Namespace) -> None:
     header = "指标".ljust(label_w) + "".join(d[5:].rjust(col_w + 1) for d in days)
     lines.append(header)
     last_group = None
-    for grp, label, field, _fmt in HOME_TABLE_ROWS:
-        if grp != last_group:
+    for grp, label, field, _fmt in rows:
+        if grouped and grp != last_group:
             lines.append(f"【{grp}】")
             last_group = grp
         pad = label_w - len(label) * 2
@@ -1863,6 +1924,11 @@ def build_parser() -> argparse.ArgumentParser:
                     help="不显示较上一周期（默认显示）")
     ht.add_argument("--raw", action="store_true", help="输出原始 JSON（每日全字段）")
     ht.add_argument("--out", help="输出到文件")
+    ht_fields = ht.add_mutually_exclusive_group()
+    ht_fields.add_argument("--fields",
+                           help="逗号分隔字段码，只渲染这些字段（顺序照给的来，不分组），如 --fields payAmt,uv")
+    ht_fields.add_argument("--all-fields", action="store_true", dest="all_fields",
+                           help="渲染全部 62 个字段（verified 按默认顺序分组 + candidate 追加到【未破译】组）")
     ht.set_defaults(func=cmd_home_table)
 
     return p

@@ -294,3 +294,118 @@ def test_download_url_accepts_https():
 def test_read_json_rejects_nonlocal_url():
     with pytest.raises(ValueError, match="本机"):
         sycm_cli._read_json("https://example.com/json")
+
+
+def test_chrome_cookie_file_uses_env_profile(monkeypatch):
+    monkeypatch.setenv("SYCM_CHROME_PROFILE", "Profile 1")
+    path = sycm_cli._chrome_cookie_file()
+    assert path is not None
+    assert "Profile 1/Cookies" in path
+
+
+def test_chrome_cookie_file_none_when_unset(monkeypatch):
+    monkeypatch.delenv("SYCM_CHROME_PROFILE", raising=False)
+    assert sycm_cli._chrome_cookie_file() is None
+
+
+def test_read_chrome_taobao_cookies_passes_profile_cookie_file(monkeypatch):
+    monkeypatch.setattr(sycm_cli.platform, "system", lambda: "Darwin")
+    monkeypatch.setenv("SYCM_CHROME_PROFILE", "Profile 1")
+    seen = {}
+
+    def fake_chrome(domain_name=None, cookie_file=None):
+        seen["domain_name"] = domain_name
+        seen["cookie_file"] = cookie_file
+        return []
+
+    monkeypatch.setattr(sycm_cli.browser_cookie3, "chrome", fake_chrome)
+    result = sycm_cli._read_chrome_taobao_cookies()
+    assert result == {}
+    assert seen["cookie_file"] is not None
+    assert "Profile 1/Cookies" in seen["cookie_file"]
+
+
+def test_read_chrome_taobao_cookies_no_cookie_file_when_unset(monkeypatch):
+    monkeypatch.setattr(sycm_cli.platform, "system", lambda: "Darwin")
+    monkeypatch.delenv("SYCM_CHROME_PROFILE", raising=False)
+    seen = {}
+
+    def fake_chrome(domain_name=None, cookie_file=None):
+        seen["cookie_file"] = cookie_file
+        return []
+
+    monkeypatch.setattr(sycm_cli.browser_cookie3, "chrome", fake_chrome)
+    sycm_cli._read_chrome_taobao_cookies()
+    assert seen["cookie_file"] is None
+
+
+# ---------- 字段字典 (Task 5) ----------
+
+def test_fields_dict_has_32_verified_and_30_candidate():
+    d = sycm_cli.load_fields_dict()
+    verified = [v for v in d.values() if v.get("status") == "verified"]
+    candidate = [v for v in d.values() if v.get("status") == "candidate"]
+    assert len(verified) == 32
+    assert len(candidate) == 30
+
+
+def test_fields_dict_missing_file_returns_empty(monkeypatch, tmp_path):
+    monkeypatch.setattr(sycm_cli, "FIELDS_PATH", tmp_path / "no.json")
+    assert sycm_cli.load_fields_dict() == {}
+
+
+def test_fields_dict_refund_notes_carry_the_gotcha():
+    d = sycm_cli.load_fields_dict()
+    assert "近7天" in d["ordRfdRate"]["note"]
+    assert "近7天" in d["payAmtRfdRate"]["note"]
+    assert "近7天" in d["payShopRfdAmt"]["note"]
+    assert "T-3" in d["realPayrealRfdRate"]["note"]
+
+
+def _fake_home_table(monkeypatch):
+    fake_table = {
+        "2026-07-17": {
+            "payAmt": {"value": 12345.678, "cycleCrc": 0.05},
+            "uv": {"value": 999},
+        },
+    }
+    monkeypatch.setattr(
+        sycm_cli, "fetch_home_table", lambda *a, **k: fake_table)
+
+
+def test_home_table_fields_flag_renders_only_selected_field(monkeypatch, capsys):
+    _fake_home_table(monkeypatch)
+    args = sycm_cli.build_parser().parse_args(
+        ["home-table", "--fields", "payAmt"])
+    sycm_cli.cmd_home_table(args)
+    out = capsys.readouterr().out
+    assert "支付金额" in out
+    assert "访客数" not in out
+    assert "【" not in out  # --fields 模式不分组
+
+
+def test_home_table_all_fields_flag_renders_verified_and_candidate_groups(
+        monkeypatch, capsys):
+    _fake_home_table(monkeypatch)
+    args = sycm_cli.build_parser().parse_args(
+        ["home-table", "--all-fields"])
+    sycm_cli.cmd_home_table(args)
+    out = capsys.readouterr().out
+    assert "支付金额" in out
+    assert "【未破译】" in out
+
+
+def test_home_table_fields_and_all_fields_are_mutually_exclusive():
+    parser = sycm_cli.build_parser()
+    with pytest.raises(SystemExit):
+        parser.parse_args(
+            ["home-table", "--fields", "payAmt", "--all-fields"])
+
+
+def test_home_table_default_behavior_unchanged(monkeypatch, capsys):
+    _fake_home_table(monkeypatch)
+    args = sycm_cli.build_parser().parse_args(["home-table"])
+    sycm_cli.cmd_home_table(args)
+    out = capsys.readouterr().out
+    assert "【支付】" in out
+    assert "支付金额" in out

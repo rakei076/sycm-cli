@@ -155,6 +155,21 @@ Windows 启动器会优先使用 `uv`；否则使用 Python 3，并自动安装�
 | `new-product-overview` | 商品/新品追踪 → 顶部汇总卡 |
 | `new-product-trend` | 商品/新品追踪 → 趋势图 |
 
+### 首页大盘（v0.5+）
+| 子命令 | 对应 sycm 页面 |
+|---|---|
+| `home-overview --date YYYY-MM-DD` | 首页/数据概览（当日支付/访客/转化/退款率/加购）|
+| `home-table --date 起 --end-date 止` | 首页/数据概览「表格」：4 个 Tab 完整 **32 项**多日并排 + 每格较上一周期 |
+| `home-trend` | 首页/数据概览趋势 |
+| `grow-factor` | 首页/增长因子（广告引导/直播/新品/会员成交额）|
+
+### 多店铺登录态（v0.5+）
+| 子命令 | 用途 |
+|---|---|
+| `export-profile <店名>` | 把当前 Chrome 登录态保存成命名 profile |
+| `--store <店名>`（放在子命令前）| 用指定店铺的登录态执行任意命令 |
+| `profiles` | 查看已保存的店铺 + 登录态新鲜度 |
+
 ### 通用工具
 | 子命令 | 用途 |
 |---|---|
@@ -256,7 +271,19 @@ GET https://sycm.taobao.com/csp/api/detail/list
 ~/.claude/skills/sycm-cli/scripts/sycm.sh <subcommand> [args...]
 ```
 
+**取数主力走字段字典。** 仓库根目录 [`fields.json`](fields.json) 是机器可读字段字典（字段码 → 中文名 / 适用命令 / 口径备注），AI 先查字典再用 `--fields` 选列取数，遇到字典没有的字段有一套「三招」发现方法论自己去查。这部分是给机器看的操作规范，写在 [SKILL.md](SKILL.md) 的「字段字典与发现方法论」一节，README 不重复。
+
+```bash
+# 只要指定几列，而不是整页 32 项
+~/.claude/skills/sycm-cli/scripts/sycm.sh home-table --fields payAmt,uv,payRate --date 2026-07-13 --end-date 2026-07-19
+```
+
 ## 更新记录
+
+### v0.7（2026-07-20）
+- **字段字典 `fields.json`**：数据概览 62 个原始字段全部入册（32 已破译 + 30 中文名待破译），每条带适用命令、数值格式、口径备注（含退款率「近 7 天仍在爬升、禁止下结论」等坑规矩）。
+- **`home-table` 万能选列**：`--fields a,b,c` 只取指定列、`--all-fields` 吐全 62 项；发现新字段的「三招方法论」+ 写回规矩写进 SKILL.md。
+- **指定 Chrome profile**：`SYCM_CHROME_PROFILE="Profile 1"` 环境变量，登录态不在 Default 身份时也能读到。
 
 ### v0.6（2026-07-19）
 - **AI 经营分析 Skill**：新增标准全景、日体检、周复盘、测款、退货归因、广告 ROI、客服质检七个模块及严格输出口径。
@@ -305,15 +332,3 @@ MIT
 </p>
 
 如果这个工具帮到了你，欢迎给个 ⭐️。
-
----
-
-## Star History
-
-<a href="https://www.star-history.com/?repos=rakei076%2Fsycm-cli%2Crakei076%2Falimama-cli&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=rakei076/sycm-cli%2Crakei076/alimama-cli&type=date&theme=dark&legend=top-left&sealed_token=1C-YpKaGC2R31lIvkjjJxJ5-Nic1CJuUI18K8ttteBZoy0ktTZ7ZtH4Das9FbfclXR8d63D7McC7DbIABoPlfFEPPVjrG29Nvo56crqx6KT53wxcUbu8e8qMMgoYWjZC7fTkPi4X5H4u7liA8fp2zUmmQ-c4CABvtjksi6k69cEhKOTppTM48U7VLkac" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=rakei076/sycm-cli%2Crakei076/alimama-cli&type=date&legend=top-left&sealed_token=1C-YpKaGC2R31lIvkjjJxJ5-Nic1CJuUI18K8ttteBZoy0ktTZ7ZtH4Das9FbfclXR8d63D7McC7DbIABoPlfFEPPVjrG29Nvo56crqx6KT53wxcUbu8e8qMMgoYWjZC7fTkPi4X5H4u7liA8fp2zUmmQ-c4CABvtjksi6k69cEhKOTppTM48U7VLkac" />
-   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=rakei076/sycm-cli%2Crakei076/alimama-cli&type=date&legend=top-left&sealed_token=1C-YpKaGC2R31lIvkjjJxJ5-Nic1CJuUI18K8ttteBZoy0ktTZ7ZtH4Das9FbfclXR8d63D7McC7DbIABoPlfFEPPVjrG29Nvo56crqx6KT53wxcUbu8e8qMMgoYWjZC7fTkPi4X5H4u7liA8fp2zUmmQ-c4CABvtjksi6k69cEhKOTppTM48U7VLkac" />
- </picture>
-</a>
