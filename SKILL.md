@@ -124,7 +124,7 @@ sycm-cli reception-list --date YYYY-MM-DD --raw   # 输出原始 JSON
 
 | 子命令 | 对应 sycm 页面 | 关键字段 | 备注 |
 |---|---|---|---|
-| `item-list` | 商品/商品排行 (`/cc/item_rank`) 或 商品 360 (`/cc/item_archives`) | 商品标题、payAmt、itmUv、payRate、itemLevel | 两个页面共用同一个接口 `/cc/item/portal/itemList.json` |
+| `item-list` | 商品/商品排行 (`/cc/item_rank`) 或 商品 360 (`/cc/item_archives`) | 商品标题、支付金额/买家数/件数/转化率/客单价、访客数、加购件数、收藏人数、平均停留时长、详情页跳出率、搜索引导访客数、成功退款金额（12 项，其余 29 个字段用 `--raw` 看）| 走 `/cc/item/view/top.json`（历史档接口）；旧接口 `/cc/item/portal/itemList.json` 只在网页「实时」档才用，且不认 `indexCode`(实测传多少个都只回 3 个指标)，已弃用 |
 | `cate-list` | 商品/品类 360 (`/cc/new_cate_archives`) | cateName、payAmt、itmUv、payRate | 返回的是当日全行业品类数据（含 children 树）|
 | `new-product-list` | 商品/新品追踪 → 列表 (`/cc/new_item_analysis`) | 商品、publishNewTime、payAmtNew、shopUvNew | 接 `--cate-id` 限定类目 |
 | `new-product-overview` | 商品/新品追踪 → 顶部汇总卡 | newItmCnt、shopUvNew、payAmtNew、addCartCntNew | 不是 list，返回汇总对象 |
@@ -147,6 +147,182 @@ sycm-cli new-product-trend --date YYYY-MM-DD --raw        # 趋势
 ```
 
 **字段值是嵌套对象，加 `--raw` 才能拿到对比指标**（cycleCrc=环比、syncCrc=同比）。摘要模式只显示 `.value`。
+
+### 单品五件套 (v0.8+) —— 这个款为什么不行
+
+回答「这个款为什么不行、哪个尺码在退、流量从哪来」。全部只读，都走 cc-v2 风格接口。
+
+先用 `item-search` 拿到 `itemId`，其余四个命令都接 `--item-id <商品ID>`；也可以直接用
+`--search <货号/标题关键词>` 代替，**命中唯一才继续，命中多个会列出候选并以退出码 1 停下**（不猜）。
+
+| 子命令 | 对应 sycm 页面 | 产出 | 日期口径 |
+|---|---|---|---|
+| `item-search <关键词>` | 商品 360 搜索框 | 商品ID、货号、价格、库存、标题 | 目录搜索，无日期参数 |
+| `item-360` | 商品 360 顶部 | 核心指标（本店值+环比+`cmpt`对比值）+ 销售总览 | 都吃 `--date` |
+| `item-sku-list` | 商品 360 / 销售分析 / SKU销售明细 | 各 SKU 组合的加购件数、支付金额/件数/买家数；`--by <属性名>` 时改出按属性聚合表；`--live` 时改出现有库存/售罄率/库存可售天数（与 `--by` 互斥）| 默认吃 `--date`；`--live` 是当前快照，忽略 `--date` |
+| `item-flow-source` | 商品 360 / 流量来源 | 来源树（多级）：uv、pv、收藏、加购、支付买家/金额、转化率 | 吃 `--date` |
+| `item-refund` | 商品 360 / 退款 | 一条命令三张表：退款原因分布、各 SKU 退款、各属性退款（含属性值） | 吃 `--date`，按**原订单付款时间** |
+| `item-profile` | 商品 360 / 客群洞察 / **客群画像** | 买这个款的人是谁：人群标签/年龄/性别/新老客/省/市/品牌偏好/类目偏好/预测消费层级/淘气值 共 10 个维度 | **只认单日**，多日区间会被拒 |
+| `item-loss-risk` | 商品 360 / 客群洞察 / **客群细分** | 潜在流失风险：你这个款的客户预测会流向哪些商品（**含友商**），带按店铺汇总 | 人气值**只有单日有**，多日会静默丢掉该列 |
+| `item-detail` | 商品 360 / 详情分析 | 核心概况 11 个指标，每个都带**同行均值/同行优秀** + 详情页逐屏（11 个楼层，两级树）看买家看到哪屏走的 | 吃 `--date` |
+| `item-price` | 商品 360 / 价格分析 | 本款价格定位（挂牌价 / 实际件单价 / 所属价格带）+ 类目各价格带大盘，**标出本款所在档** | 吃 `--date` |
+| `item-title` | 商品 360 / 标题优化 | 标题每个词带来多少搜索访客，**直接点名零引导的死词** + 推荐词（类目/属性/品牌/长尾） | 吃 `--date` |
+| `item-bundle` | 商品 360 / 关联搭配 | 买了这个款的人还买了什么：系统推荐 + 卖家自选（未配置时会说明是没配，不是取不到） | 吃 `--date` |
+| `item-content` | 商品 360 / 内容分析 | 关联视频/内容带来多少种草点击、粉丝点击、收藏、加购、支付（汇总 + 逐条内容） | **默认近 30 天**，内容效果看单日没意义 |
+| `item-service` | 商品 360 / 服务体验 | 售前咨询/售后首次解决率/有效回复/主动评价/问大家声量/成功退款，每项带对比值与环比 | 吃 `--date` |
+
+公共参数：`--item-id` / `--search` / `--date` / `--end-date` / `--limit` / `--page` / `--raw` / `--out`。
+
+```bash
+# 1. 先拿商品 ID（支持标题关键词、商品ID、商品URL、货号）
+sycm-cli item-search 连衣裙 --limit 3
+
+# 2. 单品总体面貌（核心指标 + 销售总览，都按 --date）
+sycm-cli item-360 --item-id 123456789 --date YYYY-MM-DD
+
+# 3. 哪个 SKU 组合卖得动（近 30 天，--date 与 --end-date 相隔 30 天）
+sycm-cli item-sku-list --item-id 123456789 --date 起始 --end-date 结束 --limit 10
+
+# 3b. 换个视角：哪个尺码/颜色卖得动（网页「属性分析」表，同一份数据按属性聚合）
+sycm-cli item-sku-list --item-id 123456789 --date 起始 --end-date 结束 --by 尺码
+
+# 3c. 现在该补哪个 SKU 的货（现有库存/售罄率/库存可售天数，当前快照，--date 不生效）
+sycm-cli item-sku-list --item-id 123456789 --live --limit 10
+
+# 4. 访客从哪来、哪个渠道转化差
+sycm-cli item-flow-source --item-id 123456789 --date YYYY-MM-DD --limit 10
+
+# 5. 为什么退、哪个 SKU / 哪个尺码退得多（近 30 天）
+sycm-cli item-refund --item-id 123456789 --date 起始 --end-date 结束 --limit 10
+
+# 12. 这个款的服务/售后有没有拖后腿
+sycm-cli item-service --item-id 123456789 --date 起始 --end-date 结束
+
+# 11. 哪条视频真的带货
+sycm-cli item-content --item-id 123456789 --date 起始 --end-date 结束
+
+# 10. 买了这个款的人还买了什么（配套餐用）
+sycm-cli item-bundle --item-id 123456789 --date YYYY-MM-DD
+
+# 9. 标题哪几个字是白占的
+sycm-cli item-title --item-id 123456789 --date YYYY-MM-DD
+
+# 8. 这个价位段值不值得待 —— 本款所在档的盘子多大、涨得多快
+sycm-cli item-price --item-id 123456789 --date YYYY-MM-DD
+
+# 7. 详情页哪一屏在掉人 + 跟同行比差在哪
+sycm-cli item-detail --item-id 123456789 --date YYYY-MM-DD --limit 20
+
+# 6b. 客户要跑去哪（含友商；人气值只有单日有）
+sycm-cli item-loss-risk --item-id 123456789 --date YYYY-MM-DD --limit 20
+
+# 6. 买这个款的是谁（默认人群标签；--all 一次跑完 10 个维度）
+sycm-cli item-profile --item-id 123456789 --date YYYY-MM-DD
+sycm-cli item-profile --item-id 123456789 --date YYYY-MM-DD --by province
+sycm-cli item-profile --item-id 123456789 --date YYYY-MM-DD --all --limit 5
+
+# 也可以不带 ID，直接按货号搜（命中唯一才继续）
+sycm-cli item-sku-list --search A1001 --by 颜色分类
+```
+
+`--by <属性名>` 不传就出 SKU 组合明细（`skuName` 是"颜色分类:xx;尺码:xx"这种组合值）；传了就改走
+按属性聚合的接口，出该属性维度下每个取值的汇总（`attrValue` 列）。属性名取值来自商品自身定义的
+属性（常见的是"尺码"“颜色分类”），不写死枚举——服务端不认的属性名会自己报错，不会静默返回空表。
+
+**口径警告（分析前必看）**
+
+- **日期窗口只支持 1 / 7 / 15 / 30 天**。`--date` 与 `--end-date` 的间隔必须恰好是这几个宽度之一，
+  其余宽度服务端一律 `code=1003` 拒绝（2026-08-05 实测，cc/flow/csp 三族一致），CLI 会先在本地报错。
+  `recentN` 是**相对 `dateRange`** 的，不是相对今天（同日实测：7 天窗返回值等于窗口内七个单日之和）。
+- **生意参谋商品板块反复出现同一类接口分裂：日/7天/30天档和「实时」档走的是两个完全不同的
+  接口**，只在某一档录到的接口签名不能代表另一档。已踩过三次：`item-sku-list`、`item-360` 的
+  销售总览最初侦查时页面停在「实时」档，录成 `/cc/live/...` 系列（写死当天，忽略传入日期），
+  已改正为不带 `live/` 的日期口径接口（2026-08-05 用 recent7/recent30 两次真实调用对照过，数值
+  不同）；`item-list` 也一样，最初录到的 `/cc/item/portal/itemList.json` 不认 `indexCode`（传多
+  少个都只回 3 个指标），页面日期档实际走的是 `/cc/item/view/top.json`，换过去后单次调用能拿到
+  41 个字段。**`item-sku-list` 的实时档没有丢，用 `--live` 显式切换**——现有库存 `currentStockCnt`
+  / 售罄率 `sellRate` / 库存可售天数 `stockDays` 只有实时接口才有，认日期的接口拿不到这三个字段
+  （加了 `indexCode` 也会被静默丢弃），`--live` 和 `--by` 互斥。
+- **`item-refund` 是退款事件归属，不是退货率。** 三张表都按原订单付款时间（`refundDateType=pay`）。
+  真实退货率要用同一付款批次的支付订单数作分母，CLI 不替你算，也不要自己拿这些数去算。
+- **`item-refund` 的「退款原因」表已修好（2026-08-06）。** 它曾长期返回 0 行，真凶是
+  `rfdIntervalLevel` 传了猜的 `"ALL"` —— 服务端照收、不报错、静默返空；页面实际传的是 **`99`**。
+  现在能正常拿到 8 类原因，且带 `rfdReasonTypeCn`（**内部原因 / 消费者原因**）——先看这一列，
+  内部原因才是自己能改的。金额字段是 `itemRfdAmt`，`itemSucRfdAmt` 这个名字在响应里不存在。
+- **退款率字段近 7 天还没长完。** 各 SKU 表里的 `payAmtRfdRate` / `ordRfdRate` 是平台自算的支付时间
+  口径退款率，实测 T-6 仍在爬升。`--date` 默认昨天正落在禁区里，别用近 7 天的退款率下结论。
+- **`item-360` 的 `*Cmpt` 不是同行绝对值。** 实测本店 payAmt / uv 都是三四位数时，对应的
+  `*Cmpt` 全落在 0~1 区间，量级完全对不上。具体口径未核实，别当同行对比读。
+- **`item-profile` 只认单日**（2026-08-06 实测）。传 `recent7` / `recent30` 服务端照样回
+  `code=0`，但 data 恒为空数组——又一次「参数照收、结果静默变空」。CLI 在发请求前就拦掉多日区间。
+- **`item-profile` 的三个人群口径里通常只有 `itmUv`（访问人群）有数据 —— 原因是样本量门槛。**
+  页面原文：「本店商品人群样本量小于 300 人，不统计客群画像」（2026-08-06 核对）。
+  `payByrCnt`（成交人群）与 `appSearchUv`（搜索人群）的人数一般远达不到 300，所以恒空。
+  致命的是本接口**只认单日**，没法靠拉长窗口把人数攒过门槛——**这两个画像实际上只有
+  单日就能跑到 300+ 的大流量爆款才出得来**。不是缺参数，也不等于该商品没有成交人群。
+- **`brand_prefer` 维度有标签没数值**：回得出品牌名，但访客数全 0、占比全空。命令会点明这是
+  取不到数，不是「没人偏好这些品牌」。
+- **`new_old` 的 `Y`=新客户、`N`=老客户**（2026-08-06 用页面「新老占比」环形图核对）。CLI 显示成
+  「新客户(Y)」，中文与原码并存。
+- **`item-loss-risk` 的「预测流失人气」只有单日有。** 多日区间时行还在、`customerCnt` 列被服务端
+  静默拿掉——是本项目第六次遇到「参数照收、结果悄悄缩水」。命令会显式提示，别把没有数字的表当
+  成正常结果读。
+- **`item-loss-risk` 的 `crowdType` 目前只核实了 `ptl-loss`。** 页面「流失客户」「潜在客户」那些
+  框应该还有别的值，但服务端不吐白名单、前端 39 个 JS bundle 里也搜不到，**没拿到就没写进来**。
+- **`item-detail` 的 `rivalAvg`/`rivalGood` 是真的同行对比**（同行均值 / 同行优秀），量级与本店值
+  同数量级、可直接比较。这与 `item-360` 那个量级对不上、口径不明的 `*Cmpt` **不是一回事**，别混用。
+- **`item-detail` 的 `byrType=all` 是从页面录来的，不能猜。** 服务端对瞎编的 `byrType` / `detailType`
+  不报错、静默返回空——猜错会得到一个永远空着还看不出毛病的命令。同类硬编码值还有
+  `level1LossStatus=cate-not-pay`、`indexes=itemLossUvIndex`（注意是 `indexes` 不是 `indexCode`）。
+- **`item-price` 的挂牌价与实际件单价要一起看。** 实测同一商品挂牌 210.99、实际件单价 158.10，
+  差 25%（活动/优惠）。只看其中一个都会把价格定位判断错。
+- **`item-price` 的 `tradeGrowthRate` 是字符串区间**（如「35190% ~ 35200%」），服务端已格式化，
+  不是数字，别拿去做算术。`SupplyRatioIndex` 大写 S 开头是服务端原样，不是笔误。
+- **`item-title` 的零引导词是「缺列」不是 0。** 没带来搜索的词，行里根本没有 `guideSeUv` 键。
+  CLI 打 `-` 不打 0 —— 0 会被读成「有统计只是量少」，实际是这个词一次搜索都没引来，是标题里的
+  死字。命令会直接把死词数和词表点出来，这是本模块唯一能直接执行的结论。
+- **`item-content` 的商品 ID 走 `keyword` 参数，不是 `itemId`。** 传成 itemId 服务端只回
+  「请求参数非法」，看报错想不到是这个。另外还要 `accountRole=guanghe-all` 和 `indexCode`。
+  返回里 `children` 包了一层 `{data:[...]}` 信封才是逐条内容，直接当行渲染会出一整行横杠。
+- **`item-service` 的 `needCycleCrc` 必须放在 `extMap` 里**，不是独立 query 参数。当独立参数传时
+  服务端不报错、直接回空 dict —— 曾据此误判「这个 domainCode 取不到数」。
+- **单品诊断模块没有单独命令**：它只有两个接口，`/cc/diagnose/coreIndex.json` 已经在 `item-360`
+  里，`/cc/diagnose/getIndexAttention.json` 是「关注指标」的用户配置（本店未配，返回 null），
+  不是数据。所以看单品诊断直接用 `item-360`。
+- **看 `item-loss-risk` 要先看按店铺汇总那行。** 客户流向自家其它款（正常，选品重叠）和流向友商
+  （要紧张）是两件完全不同的事，混在一张 50 行的表里看不出来。
+
+### 页面级模块（阶段3，店铺级，不带 `--item-id`）
+
+| 子命令 | 对应 sycm 页面 | 产出 | 日期口径 |
+|---|---|---|---|
+| `spu-list` | 商品/商品集分析 | 各商品集的支付金额/件数/件单价/含商品数 | **只认单日**（多日回 `param check error`，指不到日期上，CLI 本地先拦） |
+| `item-relate` | 商品/连带分析 | 主商品 + 它的关联商品（关联支付人数/购买率/访客数） | 吃 `--date`，默认 `device=2` |
+| `video-list` | 商品/素材分析/视频分析 | 各商品视频的曝光/点击/曝光点击率/有效播放/完播率/当日成交 | 吃 `--date` |
+| `macro-monitor` | 商品/宏观监控 | 全店商品实时大盘 12 项（支付/访客/加购/收藏/转化率），每项带环比 | **实时快照，`--date` 不生效** |
+| `problem-alarm` | 商品/重点商品/问题预警（隐藏路由） | 质量问题/缺货/高价限流商品计数 + 缺货明细 | 实时 |
+| `interval-analysis` | 商品/宏观监控/商品区间分析 | 动销商品按价格带/支付件数/支付金额切开，各段商品数与占比（`--by` 切视角） | 吃 `--date` |
+
+```bash
+sycm-cli spu-list    --date YYYY-MM-DD
+sycm-cli item-relate --date 起始 --end-date 结束 --limit 5
+sycm-cli video-list  --date 起始 --end-date 结束 --limit 20
+sycm-cli macro-monitor   # 实时，不用传日期
+sycm-cli problem-alarm   # 实时，不用传日期
+sycm-cli interval-analysis --date YYYY-MM-DD --by ordPqt   # 你的货集中在哪个价位
+```
+
+这三个的参数都是从页面请求录来的，有几个反直觉的点（都已固定在代码里）：
+- 商品集 `spuType=**def**` 不是 `all`
+- 连带分析关联侧字段名带 `relate` 前缀（`relatePayByrCnt`），排序参数是
+  `mainOrderBy` + `relateOrderBy` + `relateOrder`，**没有** `order`/`orderBy`；
+  只传 `mainOrderBy` 会 `code=600007` 且**消息为空**
+- 视频分析一次返回上千条（本店实测 1441），命令会报总数，别把一页当全部
+- **`problem-alarm` 的「质量问题商品」只有计数、拿不到明细**：页面上点进去是「请在新打开的
+  页面中查看」，明细在千牛体检中心，不在 sycm。命令会打这句，别当成 CLI 少做了一块。
+  接口路径里服务端把 problem 拼成了 `prolem`，不是笔误。
+- **宏观监控是实时快照，`--date` 完全不生效**：实测 day / recent7 / recent30 三档返回的
+  `payAmt` 一模一样。接口路径里服务端把 macro 拼成了 `marcro`，不是笔误。
 
 ### 首页大盘 (v0.5+) —— 数据概览 / 增长因子（老板每天看的那块）
 
@@ -425,6 +601,8 @@ Windows 的 `.runtime/` 包含登录 Profile，已被 Git 忽略；不要提交�
 ## 文件清单
 
 - `sycm_cli.py` — 主 CLI
+- `sycm_item.py` — 商品板块命令（`item-*` 五件套）；参数拼装/护栏/cookie 全复用 `sycm_cli`
+- `fields.json` — 机器可读字段字典（字段码 → 中文名 / 适用命令 / 口径备注）
 - `format_chats.py` — JSON → Markdown 报告格式化（可选）
 - `requirements.txt` — Python 依赖（browser-cookie3, curl-cffi, websocket-client）
 

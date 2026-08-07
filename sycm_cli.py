@@ -26,7 +26,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -459,10 +459,11 @@ def _api_get(path: str, params: dict[str, Any], cookies: dict[str, str], referer
 #   referer     — 对应的 sycm 页面 URL（API 风控会查 Referer，最好真实）
 #   desc        — 子命令帮助说明
 #   show        — 在结果摘要里展示的字段名列表（按顺序）
-#   param_style — "sycm-v1" (默认, csp/api 老接口) | "cc-v2" (新 cc/* 接口)
+#   param_style — "sycm-v1" (默认, csp/api 老列表接口) | "cc-v2" (新接口统一拼法，
+#                 覆盖 /cc/*、/flow/*、/csp/api/* 三族，实测拼装一致)
 #   list_path   — 从 response 里提取 list 的路径，点分；默认 "data.dataSource"
-#                 itemList / cate 类用 "data"
-#                 new-product / relate 类用 "data.data"
+#                 cate 类用 "data"
+#                 item-list / new-product / relate 类用 "data.data"
 #   total_path  — list 总数字段路径；默认 "data.count"
 #   extra_params — cc-v2 风格的额外 GET 参数（indexCode、cateId、device 等）
 
@@ -535,17 +536,46 @@ LIST_PRESETS: dict[str, dict[str, Any]] = {
     # ---- 商品大类 (cc-v2 风格接口) ----
     # 这些是 sycm 商品板块的真接口，HAR 直接抓出来的，response data 字段值多为 {value, cycleCrc, syncCrc} 对比结构
     "item-list": {
-        "path": "/cc/item/portal/itemList.json",
+        "path": "/cc/item/view/top.json",
         "param_style": "cc-v2",
         "orderBy": "payAmt",
-        "indexCode": "itmUv,payAmt,payRate,payByrCnt,uvAvgValue,payItmCnt",
+        "indexCode": ("payAmt,sucRefundAmt,payItmCnt,payByrCnt,payRate,payPct,"
+                      "itemCartCnt,itemCltByrCnt,itmUv,stayTimeAvg,itmBounceRate,"
+                      "seGuideUv,seGuidePayByrCnt,seGuidePayRate,uvAvgValue"),
+        "extra_params": {"device": "0", "compareType": "cycle"},
         "referer": "https://sycm.taobao.com/cc/item_rank",
-        "desc": "商品排行 / 商品 360 (商品/商品排行 + 商品 360 共用此接口)",
-        "list_path": "data",
-        "total_path": "",  # itemList 没 total 字段
-        # 注意：itemList 实际返回字段较少（itemScore/statDate/itemId/item/payRate/payAmt/itmUv/itemLevel）
-        # payByrCnt 等其他指标要靠 indexCode 拉，本店实测未返回；如需更多字段加 --raw
-        "show": ["item", "payAmt", "itmUv", "payRate", "itemLevel"],
+        "desc": "商品排行 / 商品 360 列表 (商品/商品排行 + 商品 360 共用此接口)",
+        # 之前挂在这里的 /cc/item/portal/itemList.json 是本仓库反复踩过的
+        # 同一类 bug：网页时间选择器停在「实时」档时录到的接口，日/7天/30天
+        # 历史档实际打的是另一个完全不同的接口。
+        # 实测（2026-08-05）：itemList.json 不论 indexCode 传几个值，返回的
+        # 永远只有 itmUv/payAmt/payRate 3 个指标——不是权限或参数问题，是这
+        # 个接口本身不认 indexCode。历史档页面真正调用的是
+        # /cc/item/view/top.json；换过去后同一次调用能拿到 41 个字段。
+        # 全仓库 grep 确认没有其它命令还在用 itemList.json，直接删掉，不留
+        # 兼容层。
+        #
+        # 实测（2026-08-05）：indexCode 在 view/top.json 上不生效——传 2 个、
+        # 15 个，或者干脆不传，返回的都是同一组固定 41 字段，不像
+        # item-sku-attr / item-flow-source 那样按 indexCode 筛列。所以这里
+        # 也谈不上"长度上限"：它根本不按这个参数过滤。继续传 indexCode 只是
+        # 为了贴近页面真实请求形态，防着服务端将来真的启用过滤。
+        #
+        # 实测（2026-08-05，同一 itemId）：2026-07-29~08-04 (recent7) 与
+        # 2026-07-06~08-04 (recent30) 两次调用的 payAmt 不同，是认日期的。
+        #
+        # 响应形状：data 是分页信封 {recordCount, data}，行列表在 data.data
+        # （不是 data 本身——旧 itemList.json 才是 data 直接是行列表）。
+        "list_path": "data.data",
+        "total_path": "data.recordCount",
+        # 只挑「支付/访客/加购/收藏/停留/跳出/搜索引导/退款」这条主线，其余
+        # 已入 indexCode 的字段（如 payItmCnt/payByrCnt/uvAvgValue）用 --raw
+        # 看，不在默认表里塞满 41 列。payPct 是已在别处验证过的「客单价」；
+        # 指标选择器里的「件单价」在这 41 个字段里没找到对应字段码，没有勉强
+        # 映射。
+        "show": ["item", "payAmt", "itmUv", "payByrCnt", "payItmCnt", "payRate",
+                 "payPct", "itemCartCnt", "itemCltByrCnt", "stayTimeAvg",
+                 "itmBounceRate", "seGuideUv", "sucRefundAmt"],
     },
     "cate-list": {
         "path": "/cc/cockpit/marcro/cate.json",
@@ -563,72 +593,172 @@ LIST_PRESETS: dict[str, dict[str, Any]] = {
         "path": "/cc/new/product/item/list.json",
         "param_style": "cc-v2",
         "orderBy": "publishNewTime",
-        "indexCode": "publishNewTime,shopUvNew,addCartCntNew,payByrCntNew,payAmtNew,uvWorth",
+        # 页面指标选择器共 8 项（同时最多选 5，但接口不受这个限制）。
+        # 2026-08-06 实测把 8 项一次全传，服务端 9 个字段全回、一个不丢——
+        # 与 item-sku-list 的库存字段被静默丢弃是两回事，这里可以放心全要。
+        "indexCode": ("publishNewTime,shopUvNew,addCartCntNew,collectCntNew,"
+                       "addCartRateNew,payByrCntNew,payAmtNew,shopPayRateNew,uvWorth"),
         "extra_params": {"cateId": "0"},
         "referer": "https://sycm.taobao.com/cc/new_item_analysis",
         "desc": "新品追踪明细 (商品/新品追踪)",
         "list_path": "data.data",
         "total_path": "data.recordCount",
-        "show": ["item", "itemId", "publishNewTime", "payAmtNew", "shopUvNew", "addCartCntNew"],
+        "show": ["item", "publishNewTime", "shopUvNew", "addCartCntNew",
+                  "collectCntNew", "addCartRateNew", "payByrCntNew",
+                  "payAmtNew", "shopPayRateNew", "uvWorth"],
     },
 }
 
 
-def fetch_preset(preset_name: str, *, start_date: str, end_date: str,
-                  page_no: int = 1, page_size: int = 10,
-                  cookies: dict[str, str] | None = None) -> dict[str, Any]:
-    """按预设名拉某个日期范围的列表。"""
-    preset = LIST_PRESETS[preset_name]
-    cookies = cookies or load_taobao_cookies()
-    style = preset.get("param_style", "sycm-v1")
+# cc 系接口支持的窗口宽度（天）。实测：其它宽度服务端一律 code=1003 拒绝。
+CC_WINDOW_DAYS = (1, 7, 15, 30)
 
-    base_params: dict[str, str] = {
-        "_": str(int(time.time() * 1000)),
-        "token": cookies.get("_tb_token_", ""),
-    }
+
+def _num(v: Any) -> str:
+    """一个数字单元格：浮点保留两位，None 打横杠（0 会被读成「有但为零」）。"""
+    if v is None:
+        return "-"
+    return f"{v:.2f}" if isinstance(v, float) else str(v)
+
+
+def _print_scalar_block(data: dict[str, Any], indent: str = "  ") -> None:
+    """把一层 {字段码: 值} 打成人看得懂的行。
+
+    2026-08-07：原来六处各自 `print(f"  {k}: {_value_of(v)}")`，于是
+    `saleRateNew: 0.24060150375939848`、`statDate: 1785945600000` 一路打到屏幕上。
+    列名和格式 fields.json 里都有，统一走 _field_label / _field_value。
+    """
+    for key, value in data.items():
+        print(f"{indent}{_field_label(key)}: {_field_value(key, value)}")
+
+
+def _field_label(code: str) -> str:
+    """列名用 fields.json 里的中文名；字典里没有的原样打字段码，不猜。"""
+    return (FIELDS_DICT.get(code) or {}).get("cn") or code
+
+
+def _field_value(code: str, value: Any) -> str:
+    """按字典的 fmt 打值。
+
+    2026-08-07：在此之前这里直接 `_value_of()`，于是 `payRate=0.006838394217482196`
+    这种裸小数一路打到屏幕上 —— 没人读得出来那是 0.68%。中文名和格式字典里
+    本来就有（cn + fmt），查字典即可，不该在代码里再抄一份。
+    """
+    unwrapped = _value_of(value)
+    if unwrapped is None:
+        return ""          # 缺列打空白，不是字面量 "None"
+    if isinstance(unwrapped, (int, float)) and not isinstance(unwrapped, bool):
+        fmt = (FIELDS_DICT.get(code) or {}).get("fmt")
+        if fmt == "epoch_ms":
+            return _as_dates([unwrapped])[0]
+        # fmt 认字典；字典没收录的退回 Rate 后缀启发式 —— 否则 itmVstPayByrRate
+        # 这种未入典的比率会从 100.00% 退成 1.00，比改造前还糟。
+        if fmt in ("pct", "rate") or (fmt is None and code.endswith("Rate")):
+            return f"{unwrapped * 100:.2f}%"
+        if isinstance(unwrapped, float):
+            if fmt in ("int", "num") and unwrapped.is_integer():
+                return str(int(unwrapped))
+            return f"{unwrapped:.2f}"
+    return str(unwrapped)
+
+
+def _infer_cc_date_type(start_date: str, end_date: str) -> str:
+    """cc 系（cc-v2 / flow-v2 / csp-item）的 dateType：单日 → day，7/15/30 天 → recentN。
+
+    实测结论（2026-08-05，用 /cc/diagnose/coreIndex.json 逐日对照）：
+
+    1. recentN 是相对 dateRange 的，不是相对今天。
+       dateRange=2026-07-01|2026-07-07 + recent7 返回的 payAmt，与该窗口内
+       七个单日各调一次得到的 payAmt 之和逐位相等；换成 2026-07-29|2026-08-04
+       返回的是另一组值。
+       返回的 statDate 也落在窗口末日。所以表头照 dateRange 打印区间是对的。
+       （uv 不等于逐日相加，是窗口内按人去重，属正常口径，不是 bug。）
+
+    2. 窗口宽度只支持 1/7/15/30 天。10 天窗口不论 dateType 传 day 还是
+       recent10，服务端都以 code=1003 拒绝，coreIndex、退款(csp-item)、
+       流量来源(flow-v2) 三个接口实测行为一致。
+       所以这里不再静默回落成 day 去发一个必然失败的请求 —— 直接在客户端
+       报清楚哪些宽度可用（设计文档 §8：已知业务错误要给明确提示）。
+    """
+    try:
+        delta_days = (datetime.strptime(end_date, "%Y-%m-%d")
+                      - datetime.strptime(start_date, "%Y-%m-%d")).days + 1
+    except ValueError as e:
+        raise ValueError(f"日期必须是 YYYY-MM-DD：{start_date} ~ {end_date}") from e
+    if delta_days == 1:
+        return "day"
+    if delta_days not in CC_WINDOW_DAYS:
+        raise ValueError(
+            f"这个接口只支持 {'/'.join(str(d) for d in CC_WINDOW_DAYS)} 天的窗口，"
+            f"你给的 {start_date} ~ {end_date} 是 {delta_days} 天。"
+            f"服务端对其它宽度一律 code=1003 拒绝（2026-08-05 实测）。"
+            f"请把 --end-date 调成距 --date 恰好 7/15/30 天，或只查单日。"
+        )
+    return f"recent{delta_days}"
+
+
+def build_query_params(preset: dict[str, Any], *, start_date: str, end_date: str,
+                        page_no: int, page_size: int, token: str,
+                        extra: dict[str, str] | None = None) -> dict[str, str]:
+    """按 preset 的 param_style 拼 query 参数（不含 `_` 时间戳，由调用方补）。
+
+    键冲突时 `extra` 覆盖 preset 的 `extra_params`（调用点比预设更具体）。
+
+    只有两种风格：
+    - "cc-v2"    — 新接口的统一拼法，覆盖 /cc/*、/flow/*、/csp/api/* 三个
+                   网关族。实测这三族的 query 拼装完全一致（dateRange +
+                   dateType + page/pageSize + order/orderBy [+ indexCode]），
+                   差异全在 path 与 extra_params 里，所以不为它们各起一个
+                   风格名——同一条代码路径挂三个标签只会让人以为拼法不同。
+                   将来真出现拼法分化，再按分化点拆新风格。
+    - "sycm-v1"  — 老 csp/api 列表接口（startDate/endDate/pageNo 那套），默认。
+    """
+    style = preset.get("param_style", "sycm-v1")
+    params: dict[str, str] = {"token": token}
 
     if style == "cc-v2":
-        # 新 cc/* 接口：dateRange="YYYY-MM-DD|YYYY-MM-DD" + dateType + indexCode
-        # 单日 → dateType=day；多日 → 推断 recent{N} 或 fallback "day"
-        if start_date == end_date:
-            date_type = "day"
-        else:
-            try:
-                from datetime import datetime as _dt
-                delta_days = (_dt.strptime(end_date, "%Y-%m-%d")
-                              - _dt.strptime(start_date, "%Y-%m-%d")).days + 1
-                date_type = f"recent{delta_days}" if delta_days in (7, 15, 30) else "day"
-            except Exception:
-                date_type = "day"
-        date_type = preset.get("default_date_type", date_type)
-
-        params = {
-            **base_params,
+        params.update({
             "dateRange": f"{start_date}|{end_date}",
-            "dateType": date_type,
+            "dateType": preset.get("default_date_type")
+                        or _infer_cc_date_type(start_date, end_date),
             "page": str(page_no),
             "pageSize": str(page_size),
             "order": "desc",
             "orderBy": preset["orderBy"],
-        }
+        })
         if preset.get("indexCode"):
             params["indexCode"] = preset["indexCode"]
-        for k, v in preset.get("extra_params", {}).items():
-            params[k] = v
     else:
-        # sycm-v1（旧 csp/api 接口）
-        sd = start_date.replace("-", "")
-        ed = end_date.replace("-", "")
-        params = {
-            **base_params,
-            "startDate": sd,
-            "endDate": ed,
+        params.update({
+            "startDate": start_date.replace("-", ""),
+            "endDate": end_date.replace("-", ""),
             "dateType": "day",
             "dateRange": "day",
             "orderBy": preset["orderBy"],
             "pageNo": str(page_no),
             "pageSize": str(page_size),
-        }
+        })
+
+    # extra_params 对所有 param_style 都生效。曾经只在一种风格里生效、其它风格
+    # 静默丢弃，是个潜伏的 bug；每种风格都该能声明自己的固定附加参数。
+    params.update(preset.get("extra_params", {}))
+    params.update(extra or {})
+    return params
+
+
+def fetch_preset(preset_name: str, *, start_date: str, end_date: str,
+                  page_no: int = 1, page_size: int = 10,
+                  cookies: dict[str, str] | None = None,
+                  extra: dict[str, str] | None = None) -> dict[str, Any]:
+    """按预设名拉某个日期范围的列表。"""
+    preset = LIST_PRESETS[preset_name]
+    cookies = cookies or load_taobao_cookies()
+    params = build_query_params(
+        preset, start_date=start_date, end_date=end_date,
+        page_no=page_no, page_size=page_size,
+        token=cookies.get("_tb_token_", ""), extra=extra,
+    )
+    params["_"] = str(int(time.time() * 1000))
     return _api_get(preset["path"], params, cookies, referer=preset["referer"])
 
 
@@ -1055,7 +1185,8 @@ def cmd_preset_list(args: argparse.Namespace) -> None:
         if not isinstance(r, dict):
             print(f"[{i:2}] {r}")
             continue
-        vals = " | ".join(f"{k}={_value_of(r.get(k, '?'))}" for k in show)
+        vals = " | ".join(f"{_field_label(k)}={_field_value(k, r.get(k, '?'))}"
+                          for k in show)
         print(f"[{i:2}] {vals}")
 
 
@@ -1150,7 +1281,67 @@ def cmd_new_product_overview(args: argparse.Namespace) -> None:
     self_ = d.get("self") or {}
     print(f"# 新品总览  {args.date}{' ~ ' + end if end != args.date else ''}  cateId={args.cate_id}")
     for k, v in self_.items():
-        print(f"  {k}: {_value_of(v)}")
+        print(f"  {_field_label(k)}: {_field_value(k, v)}")
+
+
+# 趋势表展示哪几个指标、按什么顺序。中文名和格式不写在这里 ——
+# 那两样 fields.json 已经有了（2026-08-07 把这批指标名录进字典时补齐的），
+# 再抄一份就是第二个真相来源。
+NEW_PRODUCT_TREND_METRICS = ("shopUvNew", "addCartCntNew", "collectCntNew",
+                              "payByrCntNew", "payAmtNew", "shopPayRateNew",
+                              "uvWorth")
+
+
+# sycm 的 statDate 是**北京时间零点**的毫秒时间戳。用本机时区换算会在
+# UTC+8 以西的机器上整体倒退一天（伦敦 -> 前一天 17:00，纽约 -> 前一天 12:00），
+# 日期标签静默错位。固定按 +08:00 换算。
+_BEIJING = timezone(timedelta(hours=8))
+
+
+def _as_dates(series: list[Any]) -> list[str]:
+    """statDate 是毫秒时间戳。打 1785945600000 等于没打，转成 YYYY-MM-DD。"""
+    out = []
+    for v in series:
+        if isinstance(v, (int, float)) and v > 10_000_000_000:
+            out.append(datetime.fromtimestamp(v / 1000, _BEIJING).strftime("%Y-%m-%d"))
+        else:
+            out.append(str(v))
+    return out
+
+
+def _print_new_product_trend(data: dict[str, Any]) -> None:
+    """把 {self|industry: {指标: [30 个值]}} 渲染成按日的表。
+
+    2026-08-07 补：原来这里只打「self: 1 项 / industry: 1 项」加一句
+    「建议加 --raw 看完整 JSON」——等于没渲染。实际结构很规整：
+    每个指标一条等长序列，`statDate` 就是对应的日期序列。
+    """
+    self_data = data.get("self") or {}
+    industry = data.get("industry") or {}
+    dates = self_data.get("statDate") or industry.get("statDate") or []
+    if not dates:
+        print("（无数据）这个类目/窗口没有新品趋势。")
+        return
+
+    cols = [c for c in NEW_PRODUCT_TREND_METRICS if c in self_data]
+    print("日期\t" + "\t".join(_field_label(c) for c in cols))
+    for i, day in enumerate(_as_dates(dates)):
+        cells = []
+        for code in cols:
+            series = self_data.get(code) or []
+            v = series[i] if i < len(series) else None
+            cells.append("-" if v is None else _field_value(code, v))
+        print(f"{day}\t" + "\t".join(cells))
+
+    averages = []
+    for code in cols:
+        series = industry.get(code)
+        if isinstance(series, list) and series:
+            avg = sum(series) / len(series)
+            averages.append(f"{_field_label(code)}={_field_value(code, avg)}")
+    if averages:
+        print("# 同行对照（industry，整窗均值）：" + "  ".join(averages))
+    print("# 序列按日期升序，与页面趋势图同一份数据。--raw 可看全部 14 个指标。")
 
 
 def cmd_new_product_trend(args: argparse.Namespace) -> None:
@@ -1169,15 +1360,9 @@ def cmd_new_product_trend(args: argparse.Namespace) -> None:
     if args.raw:
         print(json.dumps(data, ensure_ascii=False, indent=2))
         return
-    # trend 数据通常是按时间序列的 list 结构，直接 raw 提示
-    print(f"# 新品趋势  {args.date}{' ~ ' + end if end != args.date else ''}  cateId={args.cate_id}")
-    print("(趋势数据建议加 --raw 看完整 JSON)")
-    d = data.get("data", {}) or {}
-    if isinstance(d, dict):
-        for k in d:
-            v = d[k]
-            n = len(v) if isinstance(v, list) else 1
-            print(f"  {k}: {n} 项")
+    print(f"# 新品趋势  {args.date}{' ~ ' + end if end != args.date else ''}"
+          f"  cateId={args.cate_id}")
+    _print_new_product_trend(data.get("data") or {})
 
 
 def _fetch_live_guide(path: str, *, start_date: str, end_date: str,
@@ -1226,7 +1411,7 @@ def cmd_live_guide_overview(args: argparse.Namespace) -> None:
     metrics = ((data.get("data") or {}).get("data") or {})
     print(f"# 直播实时引导汇总  {args.date}{' ~ ' + end if end != args.date else ''}")
     for key, value in metrics.items():
-        print(f"  {key}: {_value_of(value)}")
+        print(f"  {_field_label(key)}: {_field_value(key, value)}")
 
 
 def cmd_live_guide_trend(args: argparse.Namespace) -> None:
@@ -1262,7 +1447,7 @@ def cmd_preheating_metrics(args: argparse.Namespace) -> None:
         return
     print("# 店铺预热看板指标")
     for key, value in (content.get("data") or {}).items():
-        print(f"  {key}: {_value_of(value)}")
+        print(f"  {_field_label(key)}: {_field_value(key, value)}")
 
 
 def _content_data_or_error(payload: dict[str, Any]) -> dict[str, Any]:
@@ -1302,7 +1487,7 @@ def cmd_order_overview(args: argparse.Namespace) -> None:
         values = data.get(scope) or {}
         print(f"## {scope}")
         for key, value in values.items():
-            print(f"  {key}: {_value_of(value)}")
+            print(f"  {_field_label(key)}: {_field_value(key, value)}")
 
 
 def cmd_order_trend(args: argparse.Namespace) -> None:
@@ -1364,7 +1549,7 @@ def _print_board_scopes(data: dict[str, Any], scopes: tuple[str, ...] = ("self",
             continue
         print(f"## {scope}")
         for key, value in values.items():
-            print(f"  {key}: {_value_of(value)}")
+            print(f"  {_field_label(key)}: {_field_value(key, value)}")
 
 
 def cmd_home_overview(args: argparse.Namespace) -> None:
@@ -1804,6 +1989,9 @@ def build_parser() -> argparse.ArgumentParser:
     mn.add_argument("--out", help="写入文件")
     mn.set_defaults(func=cmd_menu)
 
+    import sycm_item
+    sycm_item.register(sp, yesterday)
+
     # 命名子命令：每个高频页面一个
     for name, preset in LIST_PRESETS.items():
         sub = sp.add_parser(name, help=preset['desc'])
@@ -1990,4 +2178,10 @@ def main() -> None:
 
 
 if __name__ == "__main__":
+    # 以脚本方式运行（python sycm_cli.py …，文档里的标准跑法）时，本文件的模块名是
+    # __main__。sycm_item 顶部的 `from sycm_cli import …` 会按名字再加载一份 sycm_cli，
+    # 于是 sycm_item 抛的是第二份的 RiskTriggered，而 main() 捕获的是 __main__ 这份——
+    # 两个类不是同一个对象，风控退出码会从 2 退化成 1（护栏契约失效）。
+    # 先把自己注册成 sycm_item 要找的那个名字，全进程只存在一份 sycm_cli。
+    sys.modules.setdefault("sycm_cli", sys.modules["__main__"])
     main()

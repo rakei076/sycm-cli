@@ -9,6 +9,13 @@
 
 给 AI 代理一行命令拉取淘宝/天猫自营店铺的大盘、客服、评价、销售、商品、新品和退款数据，并按可复用的方法生成报表和经营分析。
 
+**v0.9 起商品板块全覆盖**：单品 360 的 14 个模块（详情逐屏 / 价格定位 / 标题死词 / 客群 10 维度
+/ 退款归因 / 潜在流失…）+ 宏观监控、商品排行、品类 360、商品集、新品追踪、连带分析、视频分析、
+问题预警 —— 共 **9 个页面 / 22 个模块 / 52 个命令**，其中 **14 个命令的数字已与页面逐格核对一致**。
+
+字段中文名与展示格式统一取自 [`fields.json`](fields.json)（**182 条**，`verified` 的都注明了
+验证日期与方法）；字典没收录的字段**原样打字段码，不猜中文名**。
+
 ---
 
 > 💡 推荐：自己做了一个电商模特图生成站 [paitumao.com](https://paitumao.com)，
@@ -149,11 +156,73 @@ Windows 启动器会优先使用 `uv`；否则使用 Python 3，并自动安装�
 ### 商品大类（v0.4+，新 cc-v2 接口）
 | 子命令 | 对应 sycm 页面 |
 |---|---|
-| `item-list` | 商品/商品排行 + 商品 360（共用接口）|
+| `item-list` | 商品/商品排行 + 商品 360（共用 `/cc/item/view/top.json`，12 项默认指标，`--raw` 看全部 41 个）|
 | `cate-list` | 商品/品类 360 |
 | `new-product-list` | 商品/新品追踪 → 列表 |
 | `new-product-overview` | 商品/新品追踪 → 顶部汇总卡 |
 | `new-product-trend` | 商品/新品追踪 → 趋势图 |
+
+### 单品 360 全模块（v0.9+，只读）
+覆盖单品 360 页面的全部 14 个模块。先 `item-search` 拿 `itemId`，其余都接 `--item-id`
+（或 `--search <货号/标题>`，命中唯一才继续）。
+
+| 子命令 | 用途 |
+|---|---|
+| `item-search <关键词>` | 按标题/商品ID/商品URL/货号搜商品，拿 itemId |
+| `item-360 --item-id <ID>` | 单品核心指标（本店值 + 环比 + 未核实的 cmpt 对比值）+ 销售总览，都吃 `--date` |
+| `item-sku-list --item-id <ID>` | 各 SKU 组合的加购/支付明细，吃 `--date`；`--by <属性名>` 改出按属性聚合表（尺码/颜色分类等）；`--live` 改出现有库存/售罄率/库存可售天数（当前快照，忽略 `--date`，与 `--by` 互斥） |
+| `item-flow-source --item-id <ID>` | 流量来源树：访客从哪来、哪个渠道转化差 |
+| `item-refund --item-id <ID>` | 一条命令三张表：退款原因 + 各 SKU 退款 + 各属性退款 |
+| `item-profile --item-id <ID>` | 客群洞察/客群画像：买这个款的人是谁（10 个维度，`--all` 一次跑完）。**只认单日** |
+| `item-loss-risk --item-id <ID>` | 客群洞察/客群细分：客户预测流向哪些商品（含友商），带按店铺汇总。人气值**只有单日有**；这份数据要有足够客户流向样本才出，冷门款/新款返回 0 条属正常 |
+| `item-detail --item-id <ID>` | 详情分析：核心概况（**带同行均值/优秀**）+ 详情页逐屏 11 个楼层，看买家看到哪屏走的 |
+| `item-price --item-id <ID>` | 价格分析：本款价格定位 + 类目各价格带大盘（标出本款所在档） |
+| `item-title --item-id <ID>` | 标题优化：每个词带来多少搜索访客（点名零引导死词）+ 推荐词 |
+| `item-bundle --item-id <ID>` | 关联搭配：系统推荐 + 卖家自选 |
+| `item-content --item-id <ID>` | 内容分析：哪条视频真的带货。**不传日期 = 近 30 天**（页面默认口径），显式传 `--date` 则照给的窗口来（单日也认） |
+| `item-service --item-id <ID>` | 服务体验：售前咨询/售后解决率/有效回复/问大家声量，带对比值 |
+
+```bash
+scripts/sycm.sh item-search 连衣裙 --limit 3
+scripts/sycm.sh item-sku-list    --item-id 123456789 --date 起始 --end-date 结束 --limit 10
+scripts/sycm.sh item-sku-list    --item-id 123456789 --date 起始 --end-date 结束 --by 尺码
+scripts/sycm.sh item-sku-list    --item-id 123456789 --live --limit 10
+scripts/sycm.sh item-flow-source --item-id 123456789 --date YYYY-MM-DD
+scripts/sycm.sh item-refund      --item-id 123456789 --date 起始 --end-date 结束
+scripts/sycm.sh item-profile     --item-id 123456789 --date YYYY-MM-DD --all --limit 5
+scripts/sycm.sh item-loss-risk   --item-id 123456789 --date YYYY-MM-DD --limit 20
+scripts/sycm.sh item-detail      --item-id 123456789 --date YYYY-MM-DD --limit 20
+scripts/sycm.sh item-price       --item-id 123456789 --date YYYY-MM-DD
+scripts/sycm.sh item-title       --item-id 123456789 --date YYYY-MM-DD
+scripts/sycm.sh item-bundle      --item-id 123456789 --date YYYY-MM-DD
+scripts/sycm.sh item-content     --item-id 123456789 --date 起始 --end-date 结束
+scripts/sycm.sh item-service     --item-id 123456789 --date 起始 --end-date 结束
+```
+
+口径警告（详见 [SKILL.md](SKILL.md)）：
+- 日期窗口只支持 **1 / 7 / 15 / 30 天**，其余宽度服务端 `code=1003` 拒绝，CLI 会先在本地报错。
+- 生意参谋商品板块反复出现「日/7天/30天档」与「实时档」是两个不同接口的坑：`item-sku-list`、
+  `item-360` 的销售总览走认日期的那套（2026-08-05 已从误录的 `/cc/live/` 实时接口改正，recent7 与
+  recent30 两次真实调用验证过数值不同）；`item-list` 同理，已从不认 `indexCode` 的
+  `/cc/item/portal/itemList.json` 换成 `/cc/item/view/top.json`。**`item-sku-list` 的实时档没丢，
+  用 `--live` 显式切换**（现有库存/售罄率/库存可售天数只有这个实时接口才有，与 `--by` 互斥）。
+- `item-refund` 是**退款事件归属，不是退货率**；表里的 `payAmtRfdRate` / `ordRfdRate` 近 7 天仍在爬升，别用近 7 天下结论。
+  「退款原因」表 2026-08-06 已修好（真凶是 `rfdIntervalLevel` 猜成了 `ALL`，正确值 `99`），现在带「内部原因/消费者原因」分类。
+- `item-360` 的 `*Cmpt` 口径未核实，不是同行绝对值。
+- `item-profile` **只认单日**（多日区间服务端回 `code=0` 但数据恒空，CLI 发请求前就拦）。三个人群
+  口径通常只有 `itmUv`（访问人群）有数据——平台规则是「人群样本量小于 300 人不统计客群画像」，
+  而单日口径攒不够人数，所以 `payByrCnt` / `appSearchUv` 只有大流量爆款才出得来。`brand_prefer`
+  有品牌名但数值全 0（页面同样为空，非 CLI 问题）。
+
+### 页面级模块（阶段3，不带 `--item-id`）
+| 子命令 | 用途 |
+|---|---|
+| `spu-list` | 商品集分析（**只认单日**，多日区间服务端只回一句 `param check error`，CLI 本地先拦） |
+| `item-relate` | 连带分析：主商品 + 关联商品。**不认单日**（服务端只回 `code=1002 "4004:"`，一个字不提日期），默认给近 7 天 |
+| `video-list` | 视频分析：曝光/点击/播放/完播/成交 |
+| `macro-monitor` | 宏观监控：全店商品实时大盘（**实时快照，`--date` 不生效**） |
+| `problem-alarm` | 问题预警：质量问题/缺货/高价限流商品计数 + 缺货明细（实时） |
+| `interval-analysis` | 商品区间分析：动销商品按价格带/件数/金额切开各占多少。**价格带视角只认单日**（多日服务端回 `code=1002 "4000:"`，CLI 本地先拦）。区间边界是**店铺在页面上自己配的**，配得不对会出现多行区间名与数值完全相同 —— 命令会检测并指路页面上那个「编辑」按钮 |
 
 ### 首页大盘（v0.5+）
 | 子命令 | 对应 sycm 页面 |
@@ -233,7 +302,22 @@ python ~/.codex/skills/.system/skill-creator/scripts/quick_validate.py .
 
 # 登录态和最小只读探针
 scripts/sycm.sh doctor
+
+# 商品域冒烟：19 个命令挨个打默认参数，判「能否跑通 + 有没有数据行」
+scripts/smoke-item.sh <商品ID>
+
+# 隐私扫描：敏感词 + 12 位以上真实 ID + 运行时数据文件是否进 git
+scripts/privacy-scan.sh
 ```
+
+**单元测试防不住「一开始就理解错」。** 测试的 fixture 是人手敲的正确参数，命令自己的
+默认值坏掉照样全绿——v0.9 就是这么抓出两个「默认调用必挂」的 bug 的。所以：
+
+- 冒烟脚本一律**不带参数**跑每个命令，专抓默认路径
+- 输出分 `OK / EMPTY / FAIL` 三档，**`EMPTY`（跑通但零数据行）是最值钱的信号**：
+  页面上那块要是有数，就说明参数猜错了——服务端收下不报错、然后回你一张空表
+- 完整验收流程见 [docs/plans/2026-08-07-验收测试方案.md](docs/plans/2026-08-07-验收测试方案.md)
+  （L0 环境 → L1 冒烟 → L2 逐格对账 → L3 复核已知软肋 → L4 实战有用性）
 
 发布前还应执行静态检查、依赖漏洞扫描和 Git 历史密钥扫描；真实店铺输出始终写入仓库外的临时目录。
 
@@ -279,6 +363,141 @@ GET https://sycm.taobao.com/csp/api/detail/list
 ```
 
 ## 更新记录
+### v0.9（2026-08-07）—— 商品板块全覆盖
+
+商品板块从 5 个命令做到 **19 个命令 / 9 个页面 / 22 个模块**，字典 89 → 182 条，
+192 个单元测试。
+
+#### 新增命令（14 个）
+
+- **单品 360 补齐剩余模块**：`item-detail`（详情逐屏 11 个楼层 + 同行均值/优秀）、
+  `item-price`（本款价格定位 + 类目价格带大盘）、`item-title`（逐词搜索引导，点名零引导
+  死词 + 推荐词）、`item-content`（内容/视频带货）、`item-service`（服务体验 9 项，每项带
+  同类平均）、`item-bundle`（关联搭配）、`item-profile`（客群画像 **10 个维度**，`--all`
+  一次跑完）、`item-loss-risk`（潜在流失风险，带按店铺汇总）
+- **页面级**：`spu-list`、`item-relate`、`video-list`、`macro-monitor`、
+  `interval-analysis`、`problem-alarm`
+
+#### 修好的老 bug
+
+- **`item-refund` 的退款原因表空了两天** —— v0.8.2 里记成「未确定」。真凶是
+  `rfdIntervalLevel` 被猜成了 `ALL`，页面实际发 `99`。同样的参数，`ALL` → 0 行、
+  `99` → 8 行。**服务端收下不报错，只是回你一张空表。** 顺带补上页面上有、我没渲染的
+  「流失至竞店人数」`lossByrCnt` —— 这一列直接告诉你多少人退完就去买了别家。
+- **`item-refund` 的 SKU 表被服务端截断，还谎报总数**：
+  `/cc/refund/item/sku/list.json` **无视 pageSize，每页封顶 5 行**
+  （`pageSize=100` → 5 行；`pageSize=5` 翻三页 → 12 行）。原来只发一次请求、把
+  「本页行数」当「总行数」打印。**被砍掉的 7 行里有一个 SKU 退款率 100%。**
+  已改为按 `recordCount` 翻页，表头改报服务端总数。
+- **`item-content` / `item-relate` 的默认参数直接报错**：前者 `dateType` 硬写
+  `recent30` 却配单日 `dateRange`（`code=1003`）；后者单日必挂
+  （`code=1002 "4000:"`）而默认就是昨天单日。**两个都是「不带参数跑就挂」。**
+- **`item-loss-risk` 把「没数据」误报成「日期传错了」** —— `any()` 在 0 行时也是
+  False，于是走到「多日区间会丢指标，请用单日」那句上，可用户传的就是单日。
+- **日期渲染吃本机时区**：`statDate` 是北京时间零点的毫秒时间戳，用本机时区换算会在
+  UTC+8 以西的机器上**整体倒退一天**（伦敦 → 前一天 17:00）。已固定按 +08:00 换算。
+- `item-360` 的比率不再打裸小数（`0.006628…` → `0.66%`）；`item-content` 的
+  `children` 信封不再被渲染成一整行横杠；`interval-analysis` 去掉一列自造的无意义
+  「件单价占比」（那是拿两档单价相加当分母）。
+- 9 个中文字段名按页面原话改正：有效回复人数→**有效接待人数**、问大家声量→**问大家
+  原声量**、搭配支付件数→**预测连带支付件数**、对比值→**同类商品平均** 等。
+
+#### 展示层统一
+
+改造前一半命令的表头是 `attrValue` / `payAmtRatio` / `itemSkuRfdAmt` 这种字段码，
+比率是 `0.003964321110009911` 这种裸小数，日期是 `1785945600000` 毫秒时间戳。
+
+中文名和展示格式 `fields.json` 里本来就有（`cn` + `fmt` 两列），**渲染层查字典即可**：
+
+```
+改造前  _path / uv / pv / cartByrCnt / 0.0017301038062283738
+改造后  来源路径 / 访客数 / 浏览量 / 加购人数 / 0.17%
+```
+
+字典没收录的字段**原样打字段码，不猜中文名**。
+
+#### 查清但决定不做的
+
+- `/domain/oneQuery.json` 通用网关：**结论=证伪**，指标词汇不可外推，不能替代逐个封装
+- `item-list` 的 `indexCode` 形同虚设 —— 传多传少都回同一组固定 41 字段，
+  原计划「8→30 指标分批取并合并」的前提不成立
+- **AI 价格区间分析**：接口只回元数据，真报告要在页面点「诊断分析」现场生成 = 写操作，
+  超出只读边界
+- 商品链路 21 条隐藏路由侦查完，**只有 `problem_alarm` 有独立数据**，
+  其余是下钻页 / 外链 / 已下线 / 本店无数据
+
+#### 新增验收工具
+
+- **`scripts/smoke-item.sh <商品ID>`**：19 个命令挨个**打默认参数**跑一遍，分
+  `OK / EMPTY / FAIL` 三档。`EMPTY`（跑通但零数据行）是最值钱的信号 ——
+  页面上那块要是有数，就说明参数猜错了。
+- `scripts/privacy-scan.sh` 加强：除敏感词外，新增「12 位以上真实商品 ID/userId」
+  和「运行时数据文件进 git」两条检查
+- [docs/plans/2026-08-07-验收测试方案.md](docs/plans/2026-08-07-验收测试方案.md)：
+  五层验收流程（L0 环境 → L1 冒烟 → L2 逐格对账 → L3 复核已知软肋 → L4 实战有用性）
+
+#### 三条方法论（都是踩出来的）
+
+1. **「核验过」必须包含「不带任何参数跑一遍默认调用」。** `item-content` 和
+   `item-relate` 两个 bug 同一个成因：核验时手敲了正确的日期区间，绕开了坏掉的默认值。
+   测试也挡不住 —— 测试的 fixture 同样是手敲的正确参数。**名字里有 `default` 的测试，
+   不代表它真的走了默认路径。**
+2. **数字对不上时，第一嫌疑是比对方式，不是接口。** `item-content` 的「商品点击次数」
+   被记了两天「与页面对不上」，还被降级成 `candidate`。真相是页面那一块有
+   **TOP直播 / TOP短视频 / TOP图文** 三个标签，命令走的 video 接口只对应短视频那一个 ——
+   当初拿了另一个标签的数字在比。逐格重比：**7 行 × 5 列 35 个格子全中。**
+3. **用 `innerText` 读页面比对时，相邻列会被拼成一个数。** `item-relate` 差点被误判成
+   「差 7 倍」——页面文字里的 `23.39%` 其实是「关联支付人数 2」+「关联购买率 3.39%」
+   粘在一起。判据：CLI 的两个相邻数字拼起来是否正好等于页面那一串。
+
+#### 核验状态
+
+18 个商品域命令逐个与页面比对：**14 个数字逐格核对一致**，3 个部分核对，1 个无指标可核。
+详见 [全量清单第八节](docs/plans/2026-08-05-商品板块-全量清单.md)。
+
+#### 仍未解决 / 已知边界（明写在这里，别当没有）
+
+| 项 | 说明 |
+|---|---|
+| `item-price` / `item-title` 的数值 | 页面主体是图表和鼠标悬停提示，**数值不落在文本里**，逐格核对做不了。分档、分词、推荐词本身核过 |
+| `item-content` 的覆盖范围 | 只含页面的「**TOP短视频**」标签，**TOP直播 / TOP图文 两个标签没做** |
+| `interval-analysis` 的分档 | 区间边界是**店铺在页面上自己配的**（每栏右上角有「编辑」）。配得不对时会出现多行区间名和数值完全相同 —— 命令会检测并指路那个按钮，但改配置得你自己去页面点 |
+| `item-refund` 三张子表人数合不上 | **不是 bug**：`rfdIdentifyType=alg_identify` 会给一笔退款打多个原因标签（实测原因表退款单数 168、属性表 122，两表分母 `payOrdCnt` 都是 211）。**各行不可相加**，要唯一人数看属性表。命令已在输出里写明 |
+| `item-refund` 的子原因 | 每行退款原因还带 `children`（描述不符 / 材质问题 / 做工问题等），命令暂不展开，需要时用 `--raw` |
+| `item-360` 的字段名 | 打的是**英文字段码不是中文名** —— 这些码的中文名没跟页面核过，**不猜** |
+| `item-360` 的 `*Cmpt` | 口径未核实，**不是同行绝对值**，别当同行对比解读 |
+
+### v0.8.2（2026-08-05）
+- **`item-list` 换接口**：之前的 `/cc/item/portal/itemList.json` 不认 `indexCode`
+  （实测传多少个都只回 `itmUv`/`payAmt`/`payRate` 3 个指标），换成商品排行页
+  「日/7天/30天」档实际调用的 `/cc/item/view/top.json` 后，单次调用能拿到 41
+  个字段；默认展示 12 项（支付/访客/加购/收藏/停留/跳出/搜索引导/退款），其余
+  用 `--raw` 看。旧接口在全仓库范围内确认无其它调用点，已删除，不留兼容层。
+- **`item-sku-list` 新增 `--live`**：找回之前被换掉的实时库存快照接口
+  （`/cc/live/v2/item/sale/sku/list.json`），拿现有库存 `currentStockCnt`、
+  售罄率 `sellRate`、库存可售天数 `stockDays`——这三个字段只有实时接口有，
+  日期口径接口拿不到。`--live` 会忽略 `--date`/`--end-date` 并在输出里明确
+  提示，且与 `--by` 互斥（属性聚合接口没有实时版本）。
+- **`item-refund` 的退款原因空表加说明**：`rfdReasonName` 那张表长期返回 0
+  行，同一次请求里 SKU/属性两张兄弟表都有真实数据。排查过 `rfdIdentifyType`
+  / `caseScene` / `refundDateType` / 日期窗口等多种组合，均为合法的
+  `code=0` 空结果，没能定位具体原因，结论按「未确定」处理——命令现在会在
+  空表下面打印这句说明，不再是一张没有任何解释的空表。
+- **纠正 v0.8 的接口误判**：`item-sku-list`、`item-360` 的销售总览之前录到的
+  `/cc/live/...` 系接口确实忽略 `--date`，但那是因为侦查时网页时间选择器停在
+  「实时」档；生意参谋销售分析页其实有两套接口，切到「日/7天/30天」档走的是
+  另一套不带 `live/` 的接口，正常按日期返回。已换成认日期的
+  `/cc/item/sale/sku/list.json`、`/cc/item/sale/overview.json`，recent7 与
+  recent30 两次真实调用验证过数值不同。下面 v0.8 条目里"记录两个 `/cc/live/`
+  接口忽略 `--date`"的结论已作废，保留只为存档。
+- 新增 `item-sku-list --by <属性名>`：按尺码/颜色分类等属性聚合销售（对应网页
+  「属性分析」表），走 `/cc/item/sale/sku/attrDetail.json`。
+
+### v0.8（2026-08-05）
+- 新增单品五件套（只读）：`item-search` / `item-360` / `item-sku-list` / `item-flow-source` / `item-refund`
+- 商品域字段入 `fields.json`；各属性退款表补属性值列
+- cc 系日期窗口只支持 1/7/15/30 天，其余宽度在本地就报错（服务端一律 `code=1003`）
+- 记录两个 `/cc/live/` 接口忽略 `--date` 的实时口径（实测）
 
 ### v0.7（2026-07-20）
 - **字段字典 `fields.json`**：数据概览 62 个原始字段全部入册（32 已破译 + 30 中文名待破译），每条带适用命令、数值格式、口径备注（含退款率「近 7 天仍在爬升、禁止下结论」等坑规矩）。
@@ -332,3 +551,15 @@ MIT
 </p>
 
 如果这个工具帮到了你，欢迎给个 ⭐️。
+
+---
+
+## Star History
+
+<a href="https://www.star-history.com/?repos=rakei076%2Fsycm-cli%2Crakei076%2Falimama-cli&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=rakei076/sycm-cli%2Crakei076/alimama-cli&type=date&theme=dark&legend=top-left&sealed_token=1C-YpKaGC2R31lIvkjjJxJ5-Nic1CJuUI18K8ttteBZoy0ktTZ7ZtH4Das9FbfclXR8d63D7McC7DbIABoPlfFEPPVjrG29Nvo56crqx6KT53wxcUbu8e8qMMgoYWjZC7fTkPi4X5H4u7liA8fp2zUmmQ-c4CABvtjksi6k69cEhKOTppTM48U7VLkac" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=rakei076/sycm-cli%2Crakei076/alimama-cli&type=date&legend=top-left&sealed_token=1C-YpKaGC2R31lIvkjjJxJ5-Nic1CJuUI18K8ttteBZoy0ktTZ7ZtH4Das9FbfclXR8d63D7McC7DbIABoPlfFEPPVjrG29Nvo56crqx6KT53wxcUbu8e8qMMgoYWjZC7fTkPi4X5H4u7liA8fp2zUmmQ-c4CABvtjksi6k69cEhKOTppTM48U7VLkac" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=rakei076/sycm-cli%2Crakei076/alimama-cli&type=date&legend=top-left&sealed_token=1C-YpKaGC2R31lIvkjjJxJ5-Nic1CJuUI18K8ttteBZoy0ktTZ7ZtH4Das9FbfclXR8d63D7McC7DbIABoPlfFEPPVjrG29Nvo56crqx6KT53wxcUbu8e8qMMgoYWjZC7fTkPi4X5H4u7liA8fp2zUmmQ-c4CABvtjksi6k69cEhKOTppTM48U7VLkac" />
+ </picture>
+</a>

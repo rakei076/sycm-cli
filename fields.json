@@ -1,64 +1,1755 @@
 {
-  "payAmt": {"cn": "支付金额", "scope": ["home-table", "home-overview"], "fmt": "amt", "status": "verified", "note": "支付组"},
-  "netPaymentAmount": {"cn": "净支付金额", "scope": ["home-table", "home-overview"], "fmt": "amt", "status": "verified", "note": "支付组"},
-  "uv": {"cn": "访客数", "scope": ["home-table", "home-overview"], "fmt": "int", "status": "verified", "note": "支付组"},
-  "payByrCnt": {"cn": "支付买家数", "scope": ["home-table", "home-overview"], "fmt": "int", "status": "verified", "note": "支付组"},
-  "payRate": {"cn": "支付转化率", "scope": ["home-table", "home-overview"], "fmt": "pct", "status": "verified", "note": "支付组"},
-  "pv": {"cn": "浏览量", "scope": ["home-table", "home-overview"], "fmt": "int", "status": "verified", "note": "支付组"},
-  "stayTime": {"cn": "平均停留时长", "scope": ["home-table", "home-overview"], "fmt": "num", "status": "verified", "note": "支付组"},
-  "subPayOrdSubCnt": {"cn": "支付子订单数", "scope": ["home-table", "home-overview"], "fmt": "int", "status": "verified", "note": "支付组"},
-  "payItmCnt": {"cn": "支付件数", "scope": ["home-table", "home-overview"], "fmt": "int", "status": "verified", "note": "支付组"},
-  "payPct": {"cn": "客单价", "scope": ["home-table", "home-overview"], "fmt": "amt", "status": "verified", "note": "支付组"},
-  "cartByrCnt": {"cn": "加购人数", "scope": ["home-table", "home-overview"], "fmt": "int", "status": "verified", "note": "意向组"},
-  "cltItmCnt": {"cn": "商品收藏人数", "scope": ["home-table", "home-overview"], "fmt": "int", "status": "verified", "note": "意向组"},
-  "cartItemCnt": {"cn": "加购件数", "scope": ["home-table", "home-overview"], "fmt": "int", "status": "verified", "note": "意向组"},
-  "rePurchasePayAmount": {"cn": "老客复购金额", "scope": ["home-table", "home-overview"], "fmt": "amt", "status": "verified", "note": "意向组"},
-  "payOldByrCnt": {"cn": "老客复购人数", "scope": ["home-table", "home-overview"], "fmt": "int", "status": "verified", "note": "意向组"},
-  "hasPurchaseUbyCntRate": {"cn": "老客复购率", "scope": ["home-table", "home-overview"], "fmt": "pct", "status": "verified", "note": "意向组"},
-  "consultRate": {"cn": "咨询率", "scope": ["home-table", "home-overview"], "fmt": "pct", "status": "verified", "note": "意向组"},
-  "realPayrealRfdRate": {"cn": "签收退款率", "scope": ["home-table", "home-overview"], "fmt": "pct", "status": "verified", "note": "T-3 才出值,两周以上才稳定"},
-  "rfdSucAmt": {"cn": "退款金额(完结时间)", "scope": ["home-table", "home-overview"], "fmt": "amt", "status": "verified", "note": "履约售后组"},
-  "payShopRfdAmt": {"cn": "退款金额(支付时间)", "scope": ["home-table", "home-overview"], "fmt": "amt", "status": "verified", "note": "支付时间口径,近7天数值仍在爬升(实测T-6仍未长完),分析禁止用近7天下结论"},
-  "payAmtRfdRate": {"cn": "金额退款率", "scope": ["home-table", "home-overview"], "fmt": "pct", "status": "verified", "note": "支付时间口径,近7天数值仍在爬升(实测T-6仍未长完),分析禁止用近7天下结论"},
-  "ordRfdRate": {"cn": "订单退款率", "scope": ["home-table", "home-overview"], "fmt": "pct", "status": "verified", "note": "支付时间口径,近7天数值仍在爬升(实测T-6仍未长完),分析禁止用近7天下结论"},
-  "rfdFinshDur": {"cn": "退款处理时长(天)", "scope": ["home-table", "home-overview"], "fmt": "num", "status": "verified", "note": "履约售后组"},
-  "wwReplyManualAvgTimeLen": {"cn": "旺旺人工响应时长(秒)", "scope": ["home-table", "home-overview"], "fmt": "num", "status": "verified", "note": "履约售后组"},
-  "slrRespRate": {"cn": "平台判责率", "scope": ["home-table", "home-overview"], "fmt": "pct", "status": "verified", "note": "履约售后组"},
-  "gotInTime24hRate": {"cn": "24小时揽收及时率", "scope": ["home-table", "home-overview"], "fmt": "pct", "status": "verified", "note": "履约售后组"},
-  "avgSignTimeHh": {"cn": "物流到货时长(小时)", "scope": ["home-table", "home-overview"], "fmt": "num", "status": "verified", "note": "履约售后组"},
-  "p4pExpendAmt": {"cn": "关键词推广费", "scope": ["home-table", "home-overview"], "fmt": "amt", "status": "verified", "note": "推广组"},
-  "cubeAmt": {"cn": "精准人群推广费", "scope": ["home-table", "home-overview"], "fmt": "amt", "status": "verified", "note": "推广组"},
-  "feedCharge": {"cn": "智能场景花费", "scope": ["home-table", "home-overview"], "fmt": "amt", "status": "verified", "note": "推广组"},
-  "adStrategyAmt": {"cn": "全站推广花费", "scope": ["home-table", "home-overview"], "fmt": "amt", "status": "verified", "note": "推广组"},
-  "tkExpendAmt": {"cn": "淘宝客佣金", "scope": ["home-table", "home-overview"], "fmt": "amt", "status": "verified", "note": "推广组"},
-  "admCostFamtQzt": {"cn": "admCostFamtQzt", "scope": ["home-table", "home-overview"], "fmt": "num", "status": "candidate", "note": "中文名未破译"},
-  "allContentSupplyScale": {"cn": "allContentSupplyScale", "scope": ["home-table", "home-overview"], "fmt": "num", "status": "candidate", "note": "中文名未破译"},
-  "buyAmtRatio": {"cn": "buyAmtRatio", "scope": ["home-table", "home-overview"], "fmt": "num", "status": "candidate", "note": "中文名未破译"},
-  "cartCnt": {"cn": "cartCnt", "scope": ["home-table", "home-overview"], "fmt": "num", "status": "candidate", "note": "中文名未破译"},
-  "consultingUv": {"cn": "consultingUv", "scope": ["home-table", "home-overview"], "fmt": "num", "status": "candidate", "note": "中文名未破译"},
-  "cstTransRate": {"cn": "cstTransRate", "scope": ["home-table", "home-overview"], "fmt": "num", "status": "candidate", "note": "中文名未破译"},
-  "cstUserCnt": {"cn": "cstUserCnt", "scope": ["home-table", "home-overview"], "fmt": "num", "status": "candidate", "note": "中文名未破译"},
-  "disputeDutyRatio": {"cn": "disputeDutyRatio", "scope": ["home-table", "home-overview"], "fmt": "num", "status": "candidate", "note": "中文名未破译"},
-  "followStayTime": {"cn": "followStayTime", "scope": ["home-table", "home-overview"], "fmt": "num", "status": "candidate", "note": "中文名未破译"},
-  "gotInTime48hRate": {"cn": "gotInTime48hRate", "scope": ["home-table", "home-overview"], "fmt": "num", "status": "candidate", "note": "中文名未破译"},
-  "hasBuyPayGmv": {"cn": "hasBuyPayGmv", "scope": ["home-table", "home-overview"], "fmt": "num", "status": "candidate", "note": "中文名未破译"},
-  "hasPurchaseNewUv": {"cn": "hasPurchaseNewUv", "scope": ["home-table", "home-overview"], "fmt": "num", "status": "candidate", "note": "中文名未破译"},
-  "hasPurchasedUbyCnt": {"cn": "hasPurchasedUbyCnt", "scope": ["home-table", "home-overview"], "fmt": "num", "status": "candidate", "note": "中文名未破译"},
-  "interestPortalUv": {"cn": "interestPortalUv", "scope": ["home-table", "home-overview"], "fmt": "num", "status": "candidate", "note": "中文名未破译"},
-  "livePayAmt": {"cn": "livePayAmt", "scope": ["home-table", "home-overview"], "fmt": "num", "status": "candidate", "note": "中文名未破译"},
-  "noBuyPayGmv": {"cn": "noBuyPayGmv", "scope": ["home-table", "home-overview"], "fmt": "num", "status": "candidate", "note": "中文名未破译"},
-  "noPurchaseBuyCnt": {"cn": "noPurchaseBuyCnt", "scope": ["home-table", "home-overview"], "fmt": "num", "status": "candidate", "note": "中文名未破译"},
-  "olderPayAmt": {"cn": "olderPayAmt", "scope": ["home-table", "home-overview"], "fmt": "num", "status": "candidate", "note": "中文名未破译"},
-  "payOrdCnt": {"cn": "payOrdCnt", "scope": ["home-table", "home-overview"], "fmt": "num", "status": "candidate", "note": "中文名未破译"},
-  "postTimeLenHour": {"cn": "postTimeLenHour", "scope": ["home-table", "home-overview"], "fmt": "num", "status": "candidate", "note": "中文名未破译"},
-  "postVideoCheckCnt": {"cn": "postVideoCheckCnt", "scope": ["home-table", "home-overview"], "fmt": "num", "status": "candidate", "note": "中文名未破译"},
-  "productCoverage": {"cn": "productCoverage", "scope": ["home-table", "home-overview"], "fmt": "num", "status": "candidate", "note": "中文名未破译"},
-  "reVisitAmtRatio": {"cn": "reVisitAmtRatio", "scope": ["home-table", "home-overview"], "fmt": "num", "status": "candidate", "note": "中文名未破译"},
-  "releaseItmCnt": {"cn": "releaseItmCnt", "scope": ["home-table", "home-overview"], "fmt": "num", "status": "candidate", "note": "中文名未破译"},
-  "shopCustomer": {"cn": "shopCustomer", "scope": ["home-table", "home-overview"], "fmt": "num", "status": "candidate", "note": "中文名未破译"},
-  "subPayOrdAmt": {"cn": "subPayOrdAmt", "scope": ["home-table", "home-overview"], "fmt": "num", "status": "candidate", "note": "中文名未破译"},
-  "sucRefundRate": {"cn": "sucRefundRate", "scope": ["home-table", "home-overview"], "fmt": "num", "status": "candidate", "note": "中文名未破译"},
-  "userId": {"cn": "userId", "scope": ["home-table", "home-overview"], "fmt": "num", "status": "candidate", "note": "中文名未破译"},
-  "wwGoodCstEvaRate": {"cn": "wwGoodCstEvaRate", "scope": ["home-table", "home-overview"], "fmt": "num", "status": "candidate", "note": "中文名未破译"},
-  "zzExpendAmt": {"cn": "zzExpendAmt", "scope": ["home-table", "home-overview"], "fmt": "num", "status": "candidate", "note": "中文名未破译"}
+  "payAmt": {
+    "cn": "支付金额",
+    "scope": [
+      "home-table",
+      "home-overview",
+      "item-sku-list",
+      "item-sku-list-live",
+      "item-flow-source",
+      "item-sku-attr",
+      "item-list",
+      "macro-monitor",
+      "interval-analysis"
+    ],
+    "fmt": "amt",
+    "status": "verified",
+    "note": "支付组"
+  },
+  "netPaymentAmount": {
+    "cn": "净支付金额",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "amt",
+    "status": "verified",
+    "note": "支付组"
+  },
+  "uv": {
+    "cn": "访客数",
+    "scope": [
+      "home-table",
+      "home-overview",
+      "item-flow-source"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "支付组"
+  },
+  "payByrCnt": {
+    "cn": "支付买家数",
+    "scope": [
+      "home-table",
+      "home-overview",
+      "item-sku-list",
+      "item-sku-list-live",
+      "item-flow-source",
+      "item-sku-attr",
+      "item-list",
+      "item-profile",
+      "macro-monitor"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "支付组 ｜ 2026-08-06 /cc/item/archive/profile.json 客群洞察实测：作为 crowdsType 三个合法值之一（服务端报错原文列出 itmUv,payByrCnt,appSearchUv）。该接口只认单日；实测仅 itmUv 回得出数据，另两个恒返空数组，原因未定。 ｜ 2026-08-06 已用页面截图逐格核对：性别/年龄/省/市/消费层级/淘气值/类目偏好全部一致；new_old 的 Y=新客户、N=老客户；brand_prefer 页面上同样无数值。 ｜ 2026-08-06 空表原因已查明：平台规则「本店商品人群样本量小于 300 人，不统计客群画像」（页面原文）。本接口只认单日，攒不够人数，故该口径只有大流量款才出得来。"
+  },
+  "payRate": {
+    "cn": "支付转化率",
+    "scope": [
+      "home-table",
+      "home-overview",
+      "item-flow-source",
+      "item-list",
+      "macro-monitor"
+    ],
+    "fmt": "pct",
+    "status": "verified",
+    "note": "支付组"
+  },
+  "pv": {
+    "cn": "浏览量",
+    "scope": [
+      "home-table",
+      "home-overview",
+      "item-flow-source"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "支付组"
+  },
+  "stayTime": {
+    "cn": "平均停留时长",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "num",
+    "status": "verified",
+    "note": "支付组"
+  },
+  "subPayOrdSubCnt": {
+    "cn": "支付子订单数",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "支付组"
+  },
+  "payItmCnt": {
+    "cn": "支付件数",
+    "scope": [
+      "home-table",
+      "home-overview",
+      "item-sku-list",
+      "item-sku-list-live",
+      "item-sku-attr",
+      "item-list",
+      "macro-monitor",
+      "interval-analysis"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "支付组"
+  },
+  "payPct": {
+    "cn": "客单价",
+    "scope": [
+      "home-table",
+      "home-overview",
+      "item-flow-source",
+      "item-list"
+    ],
+    "fmt": "amt",
+    "status": "verified",
+    "note": "支付组。2026-08-05：item-list(/cc/item/view/top.json) 也返回本字段码，核对后与既有「客单价」口径一致，是同一字段跨命令复用；商品排行指标选择器里另有「件单价」选项，在该接口 41 个字段里没找到对应字段码，未强行映射"
+  },
+  "cartByrCnt": {
+    "cn": "加购人数",
+    "scope": [
+      "home-table",
+      "home-overview",
+      "item-flow-source"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "意向组"
+  },
+  "cltItmCnt": {
+    "cn": "商品收藏人数",
+    "scope": [
+      "home-table",
+      "home-overview",
+      "item-flow-source"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "意向组"
+  },
+  "cartItemCnt": {
+    "cn": "加购件数(店铺/订单聚合口径)",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "意向组。与 SKU 级的 cartCnt 中文名相同但粒度不同：本字段是首页大盘的店铺聚合口径，按中文名反查时别拿它当 SKU 明细"
+  },
+  "rePurchasePayAmount": {
+    "cn": "老客复购金额",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "amt",
+    "status": "verified",
+    "note": "意向组"
+  },
+  "payOldByrCnt": {
+    "cn": "老客复购人数",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "意向组"
+  },
+  "hasPurchaseUbyCntRate": {
+    "cn": "老客复购率",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "pct",
+    "status": "verified",
+    "note": "意向组"
+  },
+  "consultRate": {
+    "cn": "咨询率",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "pct",
+    "status": "verified",
+    "note": "意向组"
+  },
+  "realPayrealRfdRate": {
+    "cn": "签收退款率",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "pct",
+    "status": "verified",
+    "note": "T-3 才出值,两周以上才稳定"
+  },
+  "rfdSucAmt": {
+    "cn": "退款金额(完结时间)",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "amt",
+    "status": "verified",
+    "note": "履约售后组"
+  },
+  "payShopRfdAmt": {
+    "cn": "退款金额(支付时间)",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "amt",
+    "status": "verified",
+    "note": "支付时间口径,近7天数值仍在爬升(实测T-6仍未长完),分析禁止用近7天下结论"
+  },
+  "payAmtRfdRate": {
+    "cn": "金额退款率",
+    "scope": [
+      "home-table",
+      "home-overview",
+      "item-refund-sku",
+      "item-refund-reason"
+    ],
+    "fmt": "pct",
+    "status": "verified",
+    "note": "支付时间口径,近7天数值仍在爬升(实测T-6仍未长完),分析禁止用近7天下结论"
+  },
+  "ordRfdRate": {
+    "cn": "订单退款率",
+    "scope": [
+      "home-table",
+      "home-overview",
+      "item-refund-sku"
+    ],
+    "fmt": "pct",
+    "status": "verified",
+    "note": "支付时间口径,近7天数值仍在爬升(实测T-6仍未长完),分析禁止用近7天下结论"
+  },
+  "rfdFinshDur": {
+    "cn": "退款处理时长(天)",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "num",
+    "status": "verified",
+    "note": "履约售后组"
+  },
+  "wwReplyManualAvgTimeLen": {
+    "cn": "旺旺人工响应时长(秒)",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "num",
+    "status": "verified",
+    "note": "履约售后组"
+  },
+  "slrRespRate": {
+    "cn": "平台判责率",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "pct",
+    "status": "verified",
+    "note": "履约售后组"
+  },
+  "gotInTime24hRate": {
+    "cn": "24小时揽收及时率",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "pct",
+    "status": "verified",
+    "note": "履约售后组"
+  },
+  "avgSignTimeHh": {
+    "cn": "物流到货时长(小时)",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "num",
+    "status": "verified",
+    "note": "履约售后组"
+  },
+  "p4pExpendAmt": {
+    "cn": "关键词推广费",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "amt",
+    "status": "verified",
+    "note": "推广组"
+  },
+  "cubeAmt": {
+    "cn": "精准人群推广费",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "amt",
+    "status": "verified",
+    "note": "推广组"
+  },
+  "feedCharge": {
+    "cn": "智能场景花费",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "amt",
+    "status": "verified",
+    "note": "推广组"
+  },
+  "adStrategyAmt": {
+    "cn": "全站推广花费",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "amt",
+    "status": "verified",
+    "note": "推广组"
+  },
+  "tkExpendAmt": {
+    "cn": "淘宝客佣金",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "amt",
+    "status": "verified",
+    "note": "推广组"
+  },
+  "admCostFamtQzt": {
+    "cn": "admCostFamtQzt",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "num",
+    "status": "candidate",
+    "note": "中文名未破译"
+  },
+  "allContentSupplyScale": {
+    "cn": "allContentSupplyScale",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "num",
+    "status": "candidate",
+    "note": "中文名未破译"
+  },
+  "buyAmtRatio": {
+    "cn": "buyAmtRatio",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "num",
+    "status": "candidate",
+    "note": "中文名未破译"
+  },
+  "cartCnt": {
+    "cn": "加购件数(SKU 级)",
+    "scope": [
+      "home-table",
+      "home-overview",
+      "item-sku-list",
+      "item-sku-list-live"
+    ],
+    "fmt": "num",
+    "status": "verified",
+    "note": "2026-08-05 单品360 SKU销售详情页表头核对为「加购件数」。与订单聚合口径的 cartItemCnt 中文名相同但粒度不同：本字段是单品某个 SKU 的加购件数"
+  },
+  "consultingUv": {
+    "cn": "consultingUv",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "num",
+    "status": "candidate",
+    "note": "中文名未破译"
+  },
+  "cstTransRate": {
+    "cn": "cstTransRate",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "num",
+    "status": "candidate",
+    "note": "中文名未破译"
+  },
+  "cstUserCnt": {
+    "cn": "cstUserCnt",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "num",
+    "status": "candidate",
+    "note": "中文名未破译"
+  },
+  "disputeDutyRatio": {
+    "cn": "disputeDutyRatio",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "num",
+    "status": "candidate",
+    "note": "中文名未破译"
+  },
+  "followStayTime": {
+    "cn": "followStayTime",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "num",
+    "status": "candidate",
+    "note": "中文名未破译"
+  },
+  "gotInTime48hRate": {
+    "cn": "gotInTime48hRate",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "num",
+    "status": "candidate",
+    "note": "中文名未破译"
+  },
+  "hasBuyPayGmv": {
+    "cn": "hasBuyPayGmv",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "num",
+    "status": "candidate",
+    "note": "中文名未破译"
+  },
+  "hasPurchaseNewUv": {
+    "cn": "hasPurchaseNewUv",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "num",
+    "status": "candidate",
+    "note": "中文名未破译"
+  },
+  "hasPurchasedUbyCnt": {
+    "cn": "hasPurchasedUbyCnt",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "num",
+    "status": "candidate",
+    "note": "中文名未破译"
+  },
+  "interestPortalUv": {
+    "cn": "interestPortalUv",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "num",
+    "status": "candidate",
+    "note": "中文名未破译"
+  },
+  "livePayAmt": {
+    "cn": "livePayAmt",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "num",
+    "status": "candidate",
+    "note": "中文名未破译"
+  },
+  "noBuyPayGmv": {
+    "cn": "noBuyPayGmv",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "num",
+    "status": "candidate",
+    "note": "中文名未破译"
+  },
+  "noPurchaseBuyCnt": {
+    "cn": "noPurchaseBuyCnt",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "num",
+    "status": "candidate",
+    "note": "中文名未破译"
+  },
+  "olderPayAmt": {
+    "cn": "olderPayAmt",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "num",
+    "status": "candidate",
+    "note": "中文名未破译"
+  },
+  "payOrdCnt": {
+    "cn": "payOrdCnt",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "num",
+    "status": "candidate",
+    "note": "中文名未破译"
+  },
+  "postTimeLenHour": {
+    "cn": "postTimeLenHour",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "num",
+    "status": "candidate",
+    "note": "中文名未破译"
+  },
+  "postVideoCheckCnt": {
+    "cn": "postVideoCheckCnt",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "num",
+    "status": "candidate",
+    "note": "中文名未破译"
+  },
+  "productCoverage": {
+    "cn": "productCoverage",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "num",
+    "status": "candidate",
+    "note": "中文名未破译"
+  },
+  "reVisitAmtRatio": {
+    "cn": "reVisitAmtRatio",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "num",
+    "status": "candidate",
+    "note": "中文名未破译"
+  },
+  "releaseItmCnt": {
+    "cn": "releaseItmCnt",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "num",
+    "status": "candidate",
+    "note": "中文名未破译"
+  },
+  "shopCustomer": {
+    "cn": "shopCustomer",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "num",
+    "status": "candidate",
+    "note": "中文名未破译"
+  },
+  "subPayOrdAmt": {
+    "cn": "subPayOrdAmt",
+    "scope": [
+      "home-table",
+      "home-overview",
+      "item-list"
+    ],
+    "fmt": "num",
+    "status": "candidate",
+    "note": "中文名未破译；2026-08-05 item-list(/cc/item/view/top.json) 也实测返回本字段，未进 show，--raw 可见"
+  },
+  "sucRefundRate": {
+    "cn": "sucRefundRate",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "num",
+    "status": "candidate",
+    "note": "中文名未破译"
+  },
+  "userId": {
+    "cn": "userId",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "num",
+    "status": "candidate",
+    "note": "中文名未破译"
+  },
+  "wwGoodCstEvaRate": {
+    "cn": "wwGoodCstEvaRate",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "num",
+    "status": "candidate",
+    "note": "中文名未破译"
+  },
+  "zzExpendAmt": {
+    "cn": "zzExpendAmt",
+    "scope": [
+      "home-table",
+      "home-overview"
+    ],
+    "fmt": "num",
+    "status": "candidate",
+    "note": "中文名未破译"
+  },
+  "skuName": {
+    "cn": "SKU 信息",
+    "scope": [
+      "item-sku-list",
+      "item-sku-list-live",
+      "item-refund-sku"
+    ],
+    "fmt": "text",
+    "status": "verified",
+    "note": "2026-08-05 页面表头核对"
+  },
+  "attrValue": {
+    "cn": "属性取值",
+    "scope": [
+      "item-sku-attr"
+    ],
+    "fmt": "text",
+    "status": "candidate",
+    "note": "attrDetail.json 按 attrName 维度返回的行取值（如 attrName=尺码 时是 XL/2XL 等）；网页表头随 attrName 变化不是固定列名，未核实统一中文列名"
+  },
+  "payAmtRatio": {
+    "cn": "支付金额占比",
+    "scope": [
+      "item-sku-attr"
+    ],
+    "fmt": "pct",
+    "status": "verified",
+    "note": "2026-08-05 商品360销售分析·属性分析表头核对"
+  },
+  "payByrCntRatio": {
+    "cn": "支付买家数占比",
+    "scope": [
+      "item-sku-attr"
+    ],
+    "fmt": "pct",
+    "status": "verified",
+    "note": "2026-08-05 商品360销售分析·属性分析表头核对"
+  },
+  "currentStockCnt": {
+    "cn": "现有库存",
+    "scope": [
+      "item-sku-list-live"
+    ],
+    "fmt": "int",
+    "status": "candidate",
+    "note": "2026-08-05 二次纠正：item-sku-list 换成认日期接口(/cc/item/sale/sku/list.json)后不返回本字段（indexCode 加了也被静默丢弃），改经由新增的 --live 开关走回实时接口 /cc/live/v2/item/sale/sku/list.json 才能拿到。实测（真实商品）：本字段是裸标量，不像 cartCnt/payAmt 那样包 {value,...}；中文名「现有库存」未逐一核对页面表头，仍标 candidate"
+  },
+  "sellRate": {
+    "cn": "售罄率(存疑)",
+    "scope": [
+      "item-sku-list-live"
+    ],
+    "fmt": "rate",
+    "status": "candidate",
+    "note": "2026-08-05 二次纠正：同 currentStockCnt，经 --live 开关可拿到，字段为裸标量；疑为售罄率，中文名未核，标 candidate"
+  },
+  "stockDays": {
+    "cn": "库存可售天数(存疑)",
+    "scope": [
+      "item-sku-list-live"
+    ],
+    "fmt": "int",
+    "status": "candidate",
+    "note": "2026-08-05 二次纠正：同 currentStockCnt，经 --live 开关可拿到，字段为裸标量；疑为库存可售天数，中文名未核，标 candidate"
+  },
+  "rfdReasonName": {
+    "cn": "退款原因",
+    "scope": [
+      "item-refund-reason"
+    ],
+    "fmt": "text",
+    "status": "verified",
+    "note": "2026-08-05 页面实测；算法归因 alg_identify"
+  },
+  "itemSucRfdByr": {
+    "cn": "成功退款买家数",
+    "scope": [
+      "item-refund-reason"
+    ],
+    "fmt": "int",
+    "status": "candidate",
+    "note": "口径为退款事件归属，不是退货率"
+  },
+  "itemSkuSucRfdByr": {
+    "cn": "该 SKU 成功退款买家数",
+    "scope": [
+      "item-refund-sku"
+    ],
+    "fmt": "int",
+    "status": "candidate",
+    "note": "口径为退款事件归属，不是退货率"
+  },
+  "itemPropRfdSucByr": {
+    "cn": "该属性成功退款买家数",
+    "scope": [
+      "item-refund-prop"
+    ],
+    "fmt": "int",
+    "status": "candidate",
+    "note": "口径为退款事件归属，不是退货率"
+  },
+  "itemSucRfdAmt": {
+    "cn": "该原因成功退款金额(存疑)",
+    "scope": [
+      "item-refund-reason"
+    ],
+    "fmt": "amt",
+    "status": "candidate",
+    "note": "中文名未核(页面表头未核对)；口径为退款事件归属，不是退货率"
+  },
+  "itemSkuRfdAmt": {
+    "cn": "该 SKU 退款金额(存疑)",
+    "scope": [
+      "item-refund-sku"
+    ],
+    "fmt": "amt",
+    "status": "candidate",
+    "note": "2026-08-05 实测真实字段名是 itemSkuRfdAmt(不是 itemSkuSucRfdAmt，那个名字不存在)；中文名未核"
+  },
+  "propName": {
+    "cn": "属性名(存疑)",
+    "scope": [
+      "item-refund-prop"
+    ],
+    "fmt": "text",
+    "status": "candidate",
+    "note": "2026-08-05 实测返回值为属性名(如「尺码」)，中文表头未核；属性的具体值在 valueName"
+  },
+  "valueName": {
+    "cn": "属性值(存疑)",
+    "scope": [
+      "item-refund-prop"
+    ],
+    "fmt": "text",
+    "status": "candidate",
+    "note": "2026-08-05 实测返回 2XL/XL/3XL/L 等属性值，中文表头未核；缺这列整张表全是「尺码」无法解读"
+  },
+  "itemPropRfdSucAmt": {
+    "cn": "该属性成功退款金额(存疑)",
+    "scope": [
+      "item-refund-prop"
+    ],
+    "fmt": "amt",
+    "status": "candidate",
+    "note": "中文名未核(页面表头未核对)；口径为退款事件归属，不是退货率"
+  },
+  "itmUv": {
+    "cn": "商品访客数",
+    "scope": [
+      "item-list",
+      "item-profile",
+      "macro-monitor"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-05 /cc/item/view/top.json 实测返回；中文名按 itm=item/Uv=访客数 命名规律推断，且与 coreIndex.json 里 uv 字段配对的对比字段 itmUvCmpt 用法一致，但未在商品排行指标选择器逐一点选核对，标 candidate ｜ 2026-08-06 /cc/item/archive/profile.json 客群洞察实测：作为 crowdsType 三个合法值之一（服务端报错原文列出 itmUv,payByrCnt,appSearchUv）。该接口只认单日；实测仅 itmUv 回得出数据，另两个恒返空数组，原因未定。 ｜ 2026-08-06 已用页面截图逐格核对：性别/年龄/省/市/消费层级/淘气值/类目偏好全部一致；new_old 的 Y=新客户、N=老客户；brand_prefer 页面上同样无数值。"
+  },
+  "itemCartCnt": {
+    "cn": "商品加购件数",
+    "scope": [
+      "item-list",
+      "macro-monitor"
+    ],
+    "fmt": "int",
+    "status": "candidate",
+    "note": "2026-08-05 /cc/item/view/top.json 实测返回；中文名参考 docs/plans/2026-08-05-商品板块-全量清单.md 宏观监控页表头([表]来源)的同名字段码记录，未在商品排行页面本身核对，标 candidate。注意与 SKU 级 cartCnt、店铺聚合口径 cartItemCnt 是三个不同字段，别混用"
+  },
+  "itemCltByrCnt": {
+    "cn": "商品收藏人数",
+    "scope": [
+      "item-list",
+      "macro-monitor"
+    ],
+    "fmt": "int",
+    "status": "candidate",
+    "note": "2026-08-05 /cc/item/view/top.json 实测返回；来源同 itemCartCnt(宏观监控页表头[表])，未在商品排行页面核对，标 candidate"
+  },
+  "stayTimeAvg": {
+    "cn": "平均停留时长",
+    "scope": [
+      "item-list"
+    ],
+    "fmt": "num",
+    "status": "candidate",
+    "note": "2026-08-05 /cc/item/view/top.json 实测返回；与同一行的 itmStayTime 数值完全相同(疑似同一指标两个字段名)，item-list 的 show 用这个展示；中文名按命名规律 + 单品360销售分析核心概况项推断，未逐一核对，标 candidate"
+  },
+  "itmStayTime": {
+    "cn": "平均停留时长(疑似与 stayTimeAvg 同一指标)",
+    "scope": [],
+    "fmt": "num",
+    "status": "candidate",
+    "note": "2026-08-05 /cc/item/view/top.json 实测：本字段与 stayTimeAvg 数值完全相同；item-list 的 show 只用 stayTimeAvg 展示，本字段 scope 留空，--raw 可见"
+  },
+  "itmBounceRate": {
+    "cn": "商品详情页跳出率",
+    "scope": [
+      "item-list"
+    ],
+    "fmt": "pct",
+    "status": "candidate",
+    "note": "2026-08-05 /cc/item/view/top.json 实测返回；中文名按命名规律 + 单品360销售分析核心概况项推断，未逐一核对，标 candidate"
+  },
+  "seGuideUv": {
+    "cn": "搜索引导访客数",
+    "scope": [
+      "item-list"
+    ],
+    "fmt": "int",
+    "status": "candidate",
+    "note": "2026-08-05 /cc/item/view/top.json 实测返回；字段名 se=搜索/Guide=引导/Uv=访客数，与商品排行指标选择器「搜索引导访客数」选项文字吻合，但未逐一点选核对映射，标 candidate"
+  },
+  "seGuidePayByrCnt": {
+    "cn": "搜索引导支付买家数",
+    "scope": [
+      "item-list"
+    ],
+    "fmt": "int",
+    "status": "candidate",
+    "note": "2026-08-05 /cc/item/view/top.json 实测返回；命名规律同 seGuideUv，未逐一核对，标 candidate"
+  },
+  "seGuidePayRate": {
+    "cn": "搜索引导支付转化率",
+    "scope": [
+      "item-list"
+    ],
+    "fmt": "pct",
+    "status": "candidate",
+    "note": "2026-08-05 /cc/item/view/top.json 实测返回；命名规律同 seGuideUv，未逐一核对，标 candidate"
+  },
+  "sucRefundAmt": {
+    "cn": "成功退款金额",
+    "scope": [
+      "item-list"
+    ],
+    "fmt": "amt",
+    "status": "candidate",
+    "note": "2026-08-05 /cc/item/view/top.json 实测返回；字段名直译对应指标选择器「成功退款金额」，但本仓库多次踩过「字面名不等于真实字段」的坑(如 itemSkuRfdAmt vs 不存在的 itemSkuSucRfdAmt)，未做页面级逐一核对前不升级为 verified"
+  },
+  "uvAvgValue": {
+    "cn": "访客平均价值",
+    "scope": [
+      "item-list"
+    ],
+    "fmt": "num",
+    "status": "candidate",
+    "note": "2026-08-05 /cc/item/view/top.json 实测返回；字段名与商品排行指标选择器「访客平均价值」吻合，未逐一核对，标 candidate"
+  },
+  "appSearchUv": {
+    "cn": "搜索人群访客数",
+    "scope": [
+      "item-profile"
+    ],
+    "fmt": "int",
+    "status": "candidate",
+    "note": "2026-08-06 /cc/item/archive/profile.json 客群洞察实测：作为 crowdsType 三个合法值之一（服务端报错原文列出 itmUv,payByrCnt,appSearchUv）。该接口只认单日；实测仅 itmUv 回得出数据，另两个恒返空数组，原因未定。 中文名按 app+Search+Uv 构词推断，未在页面核对，标 candidate。 ｜ 2026-08-06 已用页面截图逐格核对：性别/年龄/省/市/消费层级/淘气值/类目偏好全部一致；new_old 的 Y=新客户、N=老客户；brand_prefer 页面上同样无数值。 ｜ 2026-08-06 空表原因已查明：平台规则「本店商品人群样本量小于 300 人，不统计客群画像」（页面原文）。本接口只认单日，攒不够人数，故该口径只有大流量款才出得来。"
+  },
+  "customerCnt": {
+    "cn": "预测流失人气",
+    "scope": [
+      "item-loss-risk"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /mc/item/customers/lossrisk.json 实测，并与用户提供的「客群洞察 → 客群细分 → 潜在流失风险」页面截图逐行核对一致（29/20/18/15/13）。含义是「本商品的客户预测会流向该商品的人数」。多日区间时服务端会静默丢掉这一列，只有单日有值。"
+  },
+  "itemExposeUv": {
+    "cn": "曝光人数",
+    "scope": [
+      "item-detail"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /cc/item/detail/analysis/overview.json + list.json 实测（byrType=all，该参数从页面录得、猜不出来）。已与页面「详情分析」核心概况逐格核对一致。每个指标自带 rivalAvg(同行均值)/rivalGood(同行优秀)，是真同行对比，与 item-360 的 *Cmpt 不是一回事。"
+  },
+  "itemInteractUv": {
+    "cn": "互动人数",
+    "scope": [
+      "item-detail"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /cc/item/detail/analysis/overview.json + list.json 实测（byrType=all，该参数从页面录得、猜不出来）。已与页面「详情分析」核心概况逐格核对一致。每个指标自带 rivalAvg(同行均值)/rivalGood(同行优秀)，是真同行对比，与 item-360 的 *Cmpt 不是一回事。"
+  },
+  "itemCartUv": {
+    "cn": "加购人数",
+    "scope": [
+      "item-detail"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /cc/item/detail/analysis/overview.json + list.json 实测（byrType=all，该参数从页面录得、猜不出来）。已与页面「详情分析」核心概况逐格核对一致。每个指标自带 rivalAvg(同行均值)/rivalGood(同行优秀)，是真同行对比，与 item-360 的 *Cmpt 不是一回事。"
+  },
+  "itemCollectUv": {
+    "cn": "收藏人数",
+    "scope": [
+      "item-detail"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /cc/item/detail/analysis/overview.json + list.json 实测（byrType=all，该参数从页面录得、猜不出来）。已与页面「详情分析」核心概况逐格核对一致。每个指标自带 rivalAvg(同行均值)/rivalGood(同行优秀)，是真同行对比，与 item-360 的 *Cmpt 不是一回事。"
+  },
+  "itemOrderUv": {
+    "cn": "下单人数",
+    "scope": [
+      "item-detail"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /cc/item/detail/analysis/overview.json + list.json 实测（byrType=all，该参数从页面录得、猜不出来）。已与页面「详情分析」核心概况逐格核对一致。每个指标自带 rivalAvg(同行均值)/rivalGood(同行优秀)，是真同行对比，与 item-360 的 *Cmpt 不是一回事。"
+  },
+  "itemPayUv": {
+    "cn": "支付人数",
+    "scope": [
+      "item-detail"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /cc/item/detail/analysis/overview.json + list.json 实测（byrType=all，该参数从页面录得、猜不出来）。已与页面「详情分析」核心概况逐格核对一致。每个指标自带 rivalAvg(同行均值)/rivalGood(同行优秀)，是真同行对比，与 item-360 的 *Cmpt 不是一回事。"
+  },
+  "itemLossUv": {
+    "cn": "跳失人数",
+    "scope": [
+      "item-detail"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /cc/item/detail/analysis/overview.json + list.json 实测（byrType=all，该参数从页面录得、猜不出来）。已与页面「详情分析」核心概况逐格核对一致。每个指标自带 rivalAvg(同行均值)/rivalGood(同行优秀)，是真同行对比，与 item-360 的 *Cmpt 不是一回事。"
+  },
+  "itemLossRate": {
+    "cn": "跳失率",
+    "scope": [
+      "item-detail"
+    ],
+    "fmt": "rate",
+    "status": "verified",
+    "note": "2026-08-06 /cc/item/detail/analysis/overview.json + list.json 实测（byrType=all，该参数从页面录得、猜不出来）。已与页面「详情分析」核心概况逐格核对一致。每个指标自带 rivalAvg(同行均值)/rivalGood(同行优秀)，是真同行对比，与 item-360 的 *Cmpt 不是一回事。"
+  },
+  "itemAvgStayTime": {
+    "cn": "平均停留时长",
+    "scope": [
+      "item-detail"
+    ],
+    "fmt": "float",
+    "status": "verified",
+    "note": "2026-08-06 /cc/item/detail/analysis/overview.json + list.json 实测（byrType=all，该参数从页面录得、猜不出来）。已与页面「详情分析」核心概况逐格核对一致。每个指标自带 rivalAvg(同行均值)/rivalGood(同行优秀)，是真同行对比，与 item-360 的 *Cmpt 不是一回事。"
+  },
+  "itemCartConvertRate": {
+    "cn": "加购转化率",
+    "scope": [
+      "item-detail"
+    ],
+    "fmt": "rate",
+    "status": "verified",
+    "note": "2026-08-06 /cc/item/detail/analysis/overview.json + list.json 实测（byrType=all，该参数从页面录得、猜不出来）。已与页面「详情分析」核心概况逐格核对一致。每个指标自带 rivalAvg(同行均值)/rivalGood(同行优秀)，是真同行对比，与 item-360 的 *Cmpt 不是一回事。"
+  },
+  "itemPayConvertRate": {
+    "cn": "支付转化率",
+    "scope": [
+      "item-detail"
+    ],
+    "fmt": "rate",
+    "status": "verified",
+    "note": "2026-08-06 /cc/item/detail/analysis/overview.json + list.json 实测（byrType=all，该参数从页面录得、猜不出来）。已与页面「详情分析」核心概况逐格核对一致。每个指标自带 rivalAvg(同行均值)/rivalGood(同行优秀)，是真同行对比，与 item-360 的 *Cmpt 不是一回事。"
+  },
+  "priceSegName": {
+    "cn": "价格带区间",
+    "scope": [
+      "item-price"
+    ],
+    "fmt": "str",
+    "status": "verified",
+    "note": "2026-08-06 /mc/item/price/band/info/v3.json + /cc/item/price/getCateId.json 实测（参数从价格分析页面 performance 记录录得）。该商品或该行所属的类目价格区间，如 130.0-250.0。"
+  },
+  "itemUnitPrice1": {
+    "cn": "实际件单价",
+    "scope": [
+      "item-price"
+    ],
+    "fmt": "float",
+    "status": "verified",
+    "note": "2026-08-06 /mc/item/price/band/info/v3.json + /cc/item/price/getCateId.json 实测（参数从价格分析页面 performance 记录录得）。与挂牌价 price 常有明显差距（活动/优惠），两个都要看。"
+  },
+  "itemPriceSycm": {
+    "cn": "生意参谋口径价格",
+    "scope": [
+      "item-price"
+    ],
+    "fmt": "float",
+    "status": "verified",
+    "note": "2026-08-06 /mc/item/price/band/info/v3.json + /cc/item/price/getCateId.json 实测（参数从价格分析页面 performance 记录录得）。与 itemUnitPrice1 数值接近但精度不同，来源为 getCateId 接口。"
+  },
+  "tradeIndexRatio": {
+    "cn": "交易指数占比",
+    "scope": [
+      "item-price"
+    ],
+    "fmt": "rate",
+    "status": "verified",
+    "note": "2026-08-06 /mc/item/price/band/info/v3.json + /cc/item/price/getCateId.json 实测（参数从价格分析页面 performance 记录录得）。该价格带吃掉类目多大成交盘子。"
+  },
+  "SupplyRatioIndex": {
+    "cn": "供给指数",
+    "scope": [
+      "item-price"
+    ],
+    "fmt": "float",
+    "status": "verified",
+    "note": "2026-08-06 /mc/item/price/band/info/v3.json + /cc/item/price/getCateId.json 实测（参数从价格分析页面 performance 记录录得）。大写 S 开头是服务端原样，非笔误。越高说明该档卖家越挤。"
+  },
+  "tradeGrowthRate": {
+    "cn": "交易增速",
+    "scope": [
+      "item-price"
+    ],
+    "fmt": "str",
+    "status": "verified",
+    "note": "2026-08-06 /mc/item/price/band/info/v3.json + /cc/item/price/getCateId.json 实测（参数从价格分析页面 performance 记录录得）。服务端直接给字符串区间（如「35190% ~ 35200%」），不是数字，别乘 100。"
+  },
+  "searchWord": {
+    "cn": "标题分词",
+    "scope": [
+      "item-title"
+    ],
+    "fmt": "str",
+    "status": "verified",
+    "note": "2026-08-06 /cc/item/v2/getTitleWords.json 实测。**没带来搜索引导的词行里根本没有 guideSeUv 键**（缺列，不是 0）——渲染成 0 会被读成「有统计只是量少」，实际是一次都没引来。str"
+  },
+  "guideSeUv": {
+    "cn": "搜索引导访客数",
+    "scope": [
+      "item-title"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /cc/item/v2/getTitleWords.json 实测。**没带来搜索引导的词行里根本没有 guideSeUv 键**（缺列，不是 0）——渲染成 0 会被读成「有统计只是量少」，实际是一次都没引来。int"
+  },
+  "bundlePayCnt": {
+    "cn": "预测连带支付件数",
+    "scope": [
+      "item-bundle"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /cc/item/bundle/recommend.json 实测。含义是「买了本商品的人同时买该商品的件数」，同层 ratio 是占比。卖家自选接口 sellerRecommend 需要 orderBy，本店实测 0 行（未配置搭配）。 ｜ 2026-08-06 与页面核对后改用页面原名（此前是按字段码推的）。"
+  },
+  "contentItemClickCnt": {
+    "cn": "商品点击次数",
+    "scope": [
+      "item-content"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-07 与页面「内容分析 → TOP短视频」逐行比对通过（7 行全中）。此前记的「与页面对不上」是比错了标签页。"
+  },
+  "itemFansClickPv": {
+    "cn": "粉丝点击次数",
+    "scope": [
+      "item-content"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /s_content/forcc/video/single/item/list.json 实测（参数从页面录得：keyword 传商品ID、accountRole=guanghe-all、indexCode 必填）。返回两层：videoId=all 汇总行 + children 里包一层 {data:[...]} 信封才是逐个视频。"
+  },
+  "contentCltTimes": {
+    "cn": "引导收藏次数",
+    "scope": [
+      "item-content"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /s_content/forcc/video/single/item/list.json 实测（参数从页面录得：keyword 传商品ID、accountRole=guanghe-all、indexCode 必填）。返回两层：videoId=all 汇总行 + children 里包一层 {data:[...]} 信封才是逐个视频。"
+  },
+  "contentCartItmCnt": {
+    "cn": "引导加购件数",
+    "scope": [
+      "item-content"
+    ],
+    "fmt": "float",
+    "status": "verified",
+    "note": "2026-08-06 /s_content/forcc/video/single/item/list.json 实测（参数从页面录得：keyword 传商品ID、accountRole=guanghe-all、indexCode 必填）。返回两层：videoId=all 汇总行 + children 里包一层 {data:[...]} 信封才是逐个视频。"
+  },
+  "interestPayUV": {
+    "cn": "种草成交人数",
+    "scope": [
+      "item-content"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /s_content/forcc/video/single/item/list.json 实测（参数从页面录得：keyword 传商品ID、accountRole=guanghe-all、indexCode 必填）。返回两层：videoId=all 汇总行 + children 里包一层 {data:[...]} 信封才是逐个视频。"
+  },
+  "interestPayAmt": {
+    "cn": "种草成交金额",
+    "scope": [
+      "item-content"
+    ],
+    "fmt": "float",
+    "status": "verified",
+    "note": "2026-08-06 /s_content/forcc/video/single/item/list.json 实测（参数从页面录得：keyword 传商品ID、accountRole=guanghe-all、indexCode 必填）。返回两层：videoId=all 汇总行 + children 里包一层 {data:[...]} 信封才是逐个视频。"
+  },
+  "validReplyUv": {
+    "cn": "有效接待人数",
+    "scope": [
+      "item-service"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /domain/oneQuery.json domainCode=tao.shop.qos.item showType=overview 实测。**needCycleCrc 要放进 extMap 里，不是独立 query 参数** —— 当独立参数传服务端不报错、直接回空 dict。指标成对：本店值 + 同款/类目均值。 ｜ 2026-08-06 与页面核对后改用页面原名（此前是按字段码推的）。"
+  },
+  "validReplyUvSameItem": {
+    "cn": "有效接待人数(同类商品平均)",
+    "scope": [
+      "item-service"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /domain/oneQuery.json domainCode=tao.shop.qos.item showType=overview 实测。**needCycleCrc 要放进 extMap 里，不是独立 query 参数** —— 当独立参数传服务端不报错、直接回空 dict。指标成对：本店值 + 同款/类目均值。 ｜ 2026-08-06 与页面核对后改用页面原名（此前是按字段码推的）。"
+  },
+  "preSaleConsultCnt": {
+    "cn": "售前咨询人数",
+    "scope": [
+      "item-service"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /domain/oneQuery.json domainCode=tao.shop.qos.item showType=overview 实测。**needCycleCrc 要放进 extMap 里，不是独立 query 参数** —— 当独立参数传服务端不报错、直接回空 dict。指标成对：本店值 + 同款/类目均值。"
+  },
+  "preSaleAvgConsultCnt": {
+    "cn": "售前咨询人数(均值)",
+    "scope": [
+      "item-service"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /domain/oneQuery.json domainCode=tao.shop.qos.item showType=overview 实测。**needCycleCrc 要放进 extMap 里，不是独立 query 参数** —— 当独立参数传服务端不报错、直接回空 dict。指标成对：本店值 + 同款/类目均值。"
+  },
+  "preSaleConsultRate": {
+    "cn": "售前咨询率",
+    "scope": [
+      "item-service"
+    ],
+    "fmt": "rate",
+    "status": "verified",
+    "note": "2026-08-06 /domain/oneQuery.json domainCode=tao.shop.qos.item showType=overview 实测。**needCycleCrc 要放进 extMap 里，不是独立 query 参数** —— 当独立参数传服务端不报错、直接回空 dict。指标成对：本店值 + 同款/类目均值。"
+  },
+  "preSaleAvgConsultRate": {
+    "cn": "售前咨询率(均值)",
+    "scope": [
+      "item-service"
+    ],
+    "fmt": "rate",
+    "status": "verified",
+    "note": "2026-08-06 /domain/oneQuery.json domainCode=tao.shop.qos.item showType=overview 实测。**needCycleCrc 要放进 extMap 里，不是独立 query 参数** —— 当独立参数传服务端不报错、直接回空 dict。指标成对：本店值 + 同款/类目均值。"
+  },
+  "preSaleDealCnt": {
+    "cn": "售前成交人数",
+    "scope": [
+      "item-service"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /domain/oneQuery.json domainCode=tao.shop.qos.item showType=overview 实测。**needCycleCrc 要放进 extMap 里，不是独立 query 参数** —— 当独立参数传服务端不报错、直接回空 dict。指标成对：本店值 + 同款/类目均值。"
+  },
+  "preSaleAvgDealCnt": {
+    "cn": "售前成交人数(均值)",
+    "scope": [
+      "item-service"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /domain/oneQuery.json domainCode=tao.shop.qos.item showType=overview 实测。**needCycleCrc 要放进 extMap 里，不是独立 query 参数** —— 当独立参数传服务端不报错、直接回空 dict。指标成对：本店值 + 同款/类目均值。"
+  },
+  "afterSaleConsultCnt": {
+    "cn": "售后咨询人数",
+    "scope": [
+      "item-service"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /domain/oneQuery.json domainCode=tao.shop.qos.item showType=overview 实测。**needCycleCrc 要放进 extMap 里，不是独立 query 参数** —— 当独立参数传服务端不报错、直接回空 dict。指标成对：本店值 + 同款/类目均值。"
+  },
+  "afterSaleAvgConsultCnt": {
+    "cn": "售后咨询人数(均值)",
+    "scope": [
+      "item-service"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /domain/oneQuery.json domainCode=tao.shop.qos.item showType=overview 实测。**needCycleCrc 要放进 extMap 里，不是独立 query 参数** —— 当独立参数传服务端不报错、直接回空 dict。指标成对：本店值 + 同款/类目均值。"
+  },
+  "afterSaleFstSolutionRate": {
+    "cn": "售后首次解决率",
+    "scope": [
+      "item-service"
+    ],
+    "fmt": "rate",
+    "status": "verified",
+    "note": "2026-08-06 /domain/oneQuery.json domainCode=tao.shop.qos.item showType=overview 实测。**needCycleCrc 要放进 extMap 里，不是独立 query 参数** —— 当独立参数传服务端不报错、直接回空 dict。指标成对：本店值 + 同款/类目均值。"
+  },
+  "afterSaleAvgFstSolutionRate": {
+    "cn": "售后首次解决率(均值)",
+    "scope": [
+      "item-service"
+    ],
+    "fmt": "rate",
+    "status": "verified",
+    "note": "2026-08-06 /domain/oneQuery.json domainCode=tao.shop.qos.item showType=overview 实测。**needCycleCrc 要放进 extMap 里，不是独立 query 参数** —— 当独立参数传服务端不报错、直接回空 dict。指标成对：本店值 + 同款/类目均值。"
+  },
+  "actRmkCnt": {
+    "cn": "主动评价数",
+    "scope": [
+      "item-service"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /domain/oneQuery.json domainCode=tao.shop.qos.item showType=overview 实测。**needCycleCrc 要放进 extMap 里，不是独立 query 参数** —— 当独立参数传服务端不报错、直接回空 dict。指标成对：本店值 + 同款/类目均值。"
+  },
+  "actRmkCntSameItem": {
+    "cn": "主动评价数(同款)",
+    "scope": [
+      "item-service"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /domain/oneQuery.json domainCode=tao.shop.qos.item showType=overview 实测。**needCycleCrc 要放进 extMap 里，不是独立 query 参数** —— 当独立参数传服务端不报错、直接回空 dict。指标成对：本店值 + 同款/类目均值。"
+  },
+  "wdjVocCnt": {
+    "cn": "问大家原声量",
+    "scope": [
+      "item-service"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /domain/oneQuery.json domainCode=tao.shop.qos.item showType=overview 实测。**needCycleCrc 要放进 extMap 里，不是独立 query 参数** —— 当独立参数传服务端不报错、直接回空 dict。指标成对：本店值 + 同款/类目均值。 ｜ 2026-08-06 与页面核对后改用页面原名（此前是按字段码推的）。"
+  },
+  "wdjCateAvgVocCnt": {
+    "cn": "问大家原声量(同类商品平均)",
+    "scope": [
+      "item-service"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /domain/oneQuery.json domainCode=tao.shop.qos.item showType=overview 实测。**needCycleCrc 要放进 extMap 里，不是独立 query 参数** —— 当独立参数传服务端不报错、直接回空 dict。指标成对：本店值 + 同款/类目均值。 ｜ 2026-08-06 与页面核对后改用页面原名（此前是按字段码推的）。"
+  },
+  "rfdSucCnt": {
+    "cn": "成功退款笔数",
+    "scope": [
+      "item-service"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /domain/oneQuery.json domainCode=tao.shop.qos.item showType=overview 实测。**needCycleCrc 要放进 extMap 里，不是独立 query 参数** —— 当独立参数传服务端不报错、直接回空 dict。指标成对：本店值 + 同款/类目均值。"
+  },
+  "rfdCntAvg": {
+    "cn": "退款笔数(均值)",
+    "scope": [
+      "item-service"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /domain/oneQuery.json domainCode=tao.shop.qos.item showType=overview 实测。**needCycleCrc 要放进 extMap 里，不是独立 query 参数** —— 当独立参数传服务端不报错、直接回空 dict。指标成对：本店值 + 同款/类目均值。"
+  },
+  "spuName": {
+    "cn": "商品集名称",
+    "scope": [
+      "spu-list"
+    ],
+    "fmt": "str",
+    "status": "verified",
+    "note": "2026-08-06 /cc/spu/list.json 实测（spuType=def，且只认单日；多日回 param check error）。"
+  },
+  "spuTypeCn": {
+    "cn": "商品集分类",
+    "scope": [
+      "spu-list"
+    ],
+    "fmt": "str",
+    "status": "verified",
+    "note": "2026-08-06 /cc/spu/list.json 实测（spuType=def，且只认单日；多日回 param check error）。"
+  },
+  "spuItemCnt": {
+    "cn": "含商品数",
+    "scope": [
+      "spu-list"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /cc/spu/list.json 实测（spuType=def，且只认单日；多日回 param check error）。"
+  },
+  "spuPayOrdAmt": {
+    "cn": "商品集支付金额",
+    "scope": [
+      "spu-list"
+    ],
+    "fmt": "float",
+    "status": "verified",
+    "note": "2026-08-06 /cc/spu/list.json 实测（spuType=def，且只认单日；多日回 param check error）。"
+  },
+  "spuPayOrdItmQty": {
+    "cn": "商品集支付件数",
+    "scope": [
+      "spu-list"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /cc/spu/list.json 实测（spuType=def，且只认单日；多日回 param check error）。"
+  },
+  "spuUnitPrice": {
+    "cn": "商品集件单价",
+    "scope": [
+      "spu-list"
+    ],
+    "fmt": "float",
+    "status": "verified",
+    "note": "2026-08-06 /cc/spu/list.json 实测（spuType=def，且只认单日；多日回 param check error）。"
+  },
+  "relatePayByrCnt": {
+    "cn": "关联支付人数",
+    "scope": [
+      "item-relate"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /cc/item/relate/analysis.json 实测（关联侧字段带 relate 前缀，排序用 mainOrderBy+relateOrderBy+relateOrder）。"
+  },
+  "relatePayByrRate": {
+    "cn": "关联购买率",
+    "scope": [
+      "item-relate"
+    ],
+    "fmt": "rate",
+    "status": "verified",
+    "note": "2026-08-06 /cc/item/relate/analysis.json 实测（关联侧字段带 relate 前缀，排序用 mainOrderBy+relateOrderBy+relateOrder）。"
+  },
+  "relateUv": {
+    "cn": "关联访客数",
+    "scope": [
+      "item-relate"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /cc/item/relate/analysis.json 实测（关联侧字段带 relate 前缀，排序用 mainOrderBy+relateOrderBy+relateOrder）。"
+  },
+  "itemClkUv": {
+    "cn": "点击人数",
+    "scope": [
+      "video-list"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /cc/video/detail/list.json 实测（本店 1441 条视频）。"
+  },
+  "exposureClickRate": {
+    "cn": "曝光点击率",
+    "scope": [
+      "video-list"
+    ],
+    "fmt": "rate",
+    "status": "verified",
+    "note": "2026-08-06 /cc/video/detail/list.json 实测（本店 1441 条视频）。"
+  },
+  "validPlayUv": {
+    "cn": "有效播放人数",
+    "scope": [
+      "video-list"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /cc/video/detail/list.json 实测（本店 1441 条视频）。"
+  },
+  "effectivePlayRate": {
+    "cn": "有效播放率",
+    "scope": [
+      "video-list"
+    ],
+    "fmt": "rate",
+    "status": "verified",
+    "note": "2026-08-06 /cc/video/detail/list.json 实测（本店 1441 条视频）。"
+  },
+  "completionRateNew": {
+    "cn": "完播率",
+    "scope": [
+      "video-list"
+    ],
+    "fmt": "rate",
+    "status": "verified",
+    "note": "2026-08-06 /cc/video/detail/list.json 实测（本店 1441 条视频）。"
+  },
+  "daysDealUv": {
+    "cn": "当日成交人数",
+    "scope": [
+      "video-list"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /cc/video/detail/list.json 实测（本店 1441 条视频）。"
+  },
+  "daysPayAmt": {
+    "cn": "当日成交金额",
+    "scope": [
+      "video-list"
+    ],
+    "fmt": "float",
+    "status": "verified",
+    "note": "2026-08-06 /cc/video/detail/list.json 实测（本店 1441 条视频）。"
+  },
+  "itmPv": {
+    "cn": "商品浏览量",
+    "scope": [
+      "macro-monitor"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /cc/cockpit/marcro/core/live/overview.json 实测（注意服务端把 macro 拼成 marcro）。**实时快照，不认日期**：day/recent7/recent30 三档返回完全相同的值。"
+  },
+  "miniDetailUv": {
+    "cn": "微详情访客数",
+    "scope": [
+      "macro-monitor"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /cc/cockpit/marcro/core/live/overview.json 实测（注意服务端把 macro 拼成 marcro）。**实时快照，不认日期**：day/recent7/recent30 三档返回完全相同的值。"
+  },
+  "itemCartByrCnt": {
+    "cn": "商品加购人数",
+    "scope": [
+      "macro-monitor"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /cc/cockpit/marcro/core/live/overview.json 实测（注意服务端把 macro 拼成 marcro）。**实时快照，不认日期**：day/recent7/recent30 三档返回完全相同的值。"
+  },
+  "visitCartRate": {
+    "cn": "访问加购转化率",
+    "scope": [
+      "macro-monitor"
+    ],
+    "fmt": "rate",
+    "status": "verified",
+    "note": "2026-08-06 /cc/cockpit/marcro/core/live/overview.json 实测（注意服务端把 macro 拼成 marcro）。**实时快照，不认日期**：day/recent7/recent30 三档返回完全相同的值。"
+  },
+  "visitCltRate": {
+    "cn": "访问收藏转化率",
+    "scope": [
+      "macro-monitor"
+    ],
+    "fmt": "rate",
+    "status": "verified",
+    "note": "2026-08-06 /cc/cockpit/marcro/core/live/overview.json 实测（注意服务端把 macro 拼成 marcro）。**实时快照，不认日期**：day/recent7/recent30 三档返回完全相同的值。"
+  },
+  "collectCntNew": {
+    "cn": "新品收藏人数",
+    "scope": [
+      "new-product-list"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /cc/new/product/item/list.json 实测：页面指标选择器 8 项一次全传，服务端全回不丢。"
+  },
+  "addCartRateNew": {
+    "cn": "新品加购转化率",
+    "scope": [
+      "new-product-list"
+    ],
+    "fmt": "rate",
+    "status": "verified",
+    "note": "2026-08-06 /cc/new/product/item/list.json 实测：页面指标选择器 8 项一次全传，服务端全回不丢。"
+  },
+  "shopPayRateNew": {
+    "cn": "新品支付转化率",
+    "scope": [
+      "new-product-list"
+    ],
+    "fmt": "rate",
+    "status": "verified",
+    "note": "2026-08-06 /cc/new/product/item/list.json 实测：页面指标选择器 8 项一次全传，服务端全回不丢。"
+  },
+  "qualityIssueItemCnt": {
+    "cn": "质量问题商品数",
+    "scope": [
+      "problem-alarm"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /cc/prolemitem/statistics.json 实测（服务端把 problem 拼成 prolem）。实时，interval=30。质量问题商品只有计数，明细跳出 sycm 到别的系统，本 CLI 拿不到。"
+  },
+  "stockoutItemCnt": {
+    "cn": "缺货商品数",
+    "scope": [
+      "problem-alarm"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /cc/prolemitem/statistics.json 实测（服务端把 problem 拼成 prolem）。实时，interval=30。质量问题商品只有计数，明细跳出 sycm 到别的系统，本 CLI 拿不到。"
+  },
+  "highPriceItemCnt": {
+    "cn": "高价限流商品数",
+    "scope": [
+      "problem-alarm"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /cc/prolemitem/statistics.json 实测（服务端把 problem 拼成 prolem）。实时，interval=30。质量问题商品只有计数，明细跳出 sycm 到别的系统，本 CLI 拿不到。"
+  },
+  "paidItemCnt": {
+    "cn": "动销商品数",
+    "scope": [
+      "interval-analysis"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 /cc/interval/list.json 实测（宏观监控的「商品区间分析」子 tab，defAnalyseType 三视角：ordPqt/payItmCnt/payAmt）。空区间的行只有 band、没有指标键。"
+  },
+  "ordPqt": {
+    "cn": "件单价",
+    "scope": [
+      "interval-analysis"
+    ],
+    "fmt": "float",
+    "status": "verified",
+    "note": "2026-08-06 /cc/interval/list.json 实测（宏观监控的「商品区间分析」子 tab，defAnalyseType 三视角：ordPqt/payItmCnt/payAmt）。空区间的行只有 band、没有指标键。"
+  },
+  "band": {
+    "cn": "区间",
+    "scope": [
+      "interval-analysis"
+    ],
+    "fmt": "str",
+    "status": "verified",
+    "note": "2026-08-06 /cc/interval/list.json 实测（宏观监控的「商品区间分析」子 tab，defAnalyseType 三视角：ordPqt/payItmCnt/payAmt）。空区间的行只有 band、没有指标键。"
+  },
+  "rfdReasonTypeCn": {
+    "cn": "退款原因大类",
+    "scope": [
+      "item-refund-reason"
+    ],
+    "fmt": "str",
+    "status": "verified",
+    "note": "2026-08-06 /csp/api/refund/item/reason/list/v2.json 实测（**rfdIntervalLevel 必须传 99**，传自己猜的 ALL 会静默返空——这张表曾因此空了两天）。str"
+  },
+  "rfdReasonNameCn": {
+    "cn": "退款原因",
+    "scope": [
+      "item-refund-reason"
+    ],
+    "fmt": "str",
+    "status": "verified",
+    "note": "2026-08-06 /csp/api/refund/item/reason/list/v2.json 实测（**rfdIntervalLevel 必须传 99**，传自己猜的 ALL 会静默返空——这张表曾因此空了两天）。str"
+  },
+  "itemRfdAmt": {
+    "cn": "退款金额",
+    "scope": [
+      "item-refund-reason"
+    ],
+    "fmt": "float",
+    "status": "verified",
+    "note": "2026-08-06 /csp/api/refund/item/reason/list/v2.json 实测（**rfdIntervalLevel 必须传 99**，传自己猜的 ALL 会静默返空——这张表曾因此空了两天）。float"
+  },
+  "lossByrCnt": {
+    "cn": "流失至竞店人数",
+    "scope": [
+      "item-refund-reason"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "2026-08-06 与页面「退款原因」表的「流失至竞店人数」列核对一致。含义是因该退款原因流失到竞店的人数——退了还留在店里、和退了直接去买别家是两回事。"
+  },
+  "shopUvNew": {
+    "cn": "访客数",
+    "scope": [
+      "new-product-list",
+      "new-product-overview",
+      "new-product-trend"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "中文名来自新品追踪页指标选择器（2026-08-05 录），权威"
+  },
+  "addCartCntNew": {
+    "cn": "加购人数",
+    "scope": [
+      "new-product-list",
+      "new-product-overview",
+      "new-product-trend"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "中文名来自新品追踪页指标选择器（2026-08-05 录），权威"
+  },
+  "payByrCntNew": {
+    "cn": "支付买家数",
+    "scope": [
+      "new-product-list",
+      "new-product-overview",
+      "new-product-trend"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "中文名来自新品追踪页指标选择器（2026-08-05 录），权威"
+  },
+  "payAmtNew": {
+    "cn": "支付金额",
+    "scope": [
+      "new-product-list",
+      "new-product-overview",
+      "new-product-trend"
+    ],
+    "fmt": "amt",
+    "status": "verified",
+    "note": "中文名来自新品追踪页指标选择器（2026-08-05 录），权威"
+  },
+  "uvWorth": {
+    "cn": "UV价值",
+    "scope": [
+      "new-product-list",
+      "new-product-overview",
+      "new-product-trend"
+    ],
+    "fmt": "num",
+    "status": "verified",
+    "note": "中文名来自新品追踪页指标选择器（2026-08-05 录），权威"
+  },
+  "publishNewTime": {
+    "cn": "上新时间",
+    "scope": [
+      "new-product-list"
+    ],
+    "fmt": "text",
+    "status": "verified",
+    "note": "列表独有字段（2026-08-05 页面表头）"
+  },
+  "newItmCnt": {
+    "cn": "新品数",
+    "scope": [
+      "new-product-overview"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "总览独有（2026-08-05 页面）"
+  },
+  "flowNewItmCnt": {
+    "cn": "有访客新品数",
+    "scope": [
+      "new-product-overview"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "总览独有（2026-08-05 页面）"
+  },
+  "saleNewItmCnt": {
+    "cn": "动销新品数",
+    "scope": [
+      "new-product-overview"
+    ],
+    "fmt": "int",
+    "status": "verified",
+    "note": "总览独有（2026-08-05 页面）"
+  },
+  "saleRateNew": {
+    "cn": "新品动销率",
+    "scope": [
+      "new-product-overview"
+    ],
+    "fmt": "pct",
+    "status": "verified",
+    "note": "总览独有（2026-08-05 页面）"
+  },
+  "cateName": {
+    "cn": "类目",
+    "scope": [
+      "cate-list"
+    ],
+    "fmt": "text",
+    "status": "verified",
+    "note": "品类360 页面表头（2026-08-05）"
+  },
+  "item": {
+    "cn": "商品",
+    "scope": [
+      "item-list",
+      "new-product-list"
+    ],
+    "fmt": "text",
+    "status": "verified",
+    "note": "商品排行固有字段（2026-08-05）"
+  },
+  "statDate": {
+    "cn": "统计日期",
+    "scope": [
+      "item-360",
+      "new-product-overview",
+      "new-product-trend",
+      "interval-analysis"
+    ],
+    "fmt": "epoch_ms",
+    "status": "verified",
+    "note": "毫秒时间戳，渲染时转 YYYY-MM-DD（2026-08-07）"
+  }
 }
