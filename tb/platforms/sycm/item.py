@@ -1,6 +1,6 @@
 """生意参谋「商品」板块命令。只读。
 
-与主模块的关系：参数拼装、护栏、cookie 读取全部复用 sycm_cli，
+与主模块的关系：参数拼装、护栏、cookie 读取全部复用 cli.py（cli.py 再交给 tb.core），
 本模块只放商品域的 preset 定义与命令实现。
 """
 from __future__ import annotations
@@ -13,7 +13,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
 
-from sycm_cli import (
+from .cli import (
     _api_get,
     _infer_cc_date_type,
     _num,
@@ -21,7 +21,6 @@ from sycm_cli import (
     _print_scalar_block,
     _field_value,
     _dig,
-    _sleep_humanlike,
     _value_of,
     build_query_params,
     load_taobao_cookies,
@@ -330,8 +329,7 @@ _MAX_PAGES = 6
 
 
 def fetch_item_rows(name: str, *, item_id: str, start_date: str, end_date: str,
-                     want: int, cookies: dict[str, str],
-                     sleep_first: bool = True) -> tuple[list[Any], int | None]:
+                     want: int, cookies: dict[str, str]) -> tuple[list[Any], int | None]:
     """取一张明细表，服务端每页封顶时自动翻页补齐到 want 行。
 
     2026-08-07 取证：`/cc/refund/item/sku/list.json` 无视 pageSize，每页最多
@@ -343,9 +341,6 @@ def fetch_item_rows(name: str, *, item_id: str, start_date: str, end_date: str,
     rows: list[Any] = []
     total: int | None = None
     for page in range(1, _MAX_PAGES + 1):
-        if sleep_first or page > 1:
-            _sleep_humanlike()
-        sleep_first = True
         raw = fetch_item_preset(name, item_id=item_id, start_date=start_date,
                                  end_date=end_date, page_no=page,
                                  page_size=max(want, 10), cookies=cookies)
@@ -521,20 +516,15 @@ REFUND_SECTIONS = [
 def cmd_item_refund(args: argparse.Namespace) -> None:
     """一条命令拉齐退款原因 / SKU / 属性三张表。"""
     cookies = load_taobao_cookies()
-    # --search 会先发一次搜索请求，那之后紧接着的第一次取数也要隔开。
-    already_requested = not getattr(args, "item_id", None)
     item_id = resolve_item_id(args, cookies=cookies)
     end = args.end_date or args.date
     bundle: dict[str, Any] = {}
     totals: dict[str, int | None] = {}
     for name, _ in REFUND_SECTIONS:
-        # 风控是本项目第一条护栏，突发流量正是触发方式；仓库里所有多请求路径
-        # 都走 _sleep_humanlike（1.8~3.5s），CLI 的警告文案也是这么宣称的。
+        # 风控是本项目第一条护栏，突发流量正是触发方式；请求之间的间隔（1.8~3.5s）由 tb.core.client 统一保证。
         rows, total = fetch_item_rows(name, item_id=item_id,
                                        start_date=args.date, end_date=end,
-                                       want=args.limit, cookies=cookies,
-                                       sleep_first=already_requested)
-        already_requested = True
+                                       want=args.limit, cookies=cookies)
         bundle[name] = rows
         totals[name] = total
     if args.out:
@@ -617,15 +607,11 @@ def split_compare_fields(row: dict[str, Any]) -> dict[str, Any]:
 def cmd_item_360(args: argparse.Namespace) -> None:
     """单品总体面貌：诊断核心指标（带同行对比）+ 销售总览。"""
     cookies = load_taobao_cookies()
-    already_requested = not getattr(args, "item_id", None)  # --search 先发过一次
     item_id = resolve_item_id(args, cookies=cookies)
     end = args.end_date or args.date
-    if already_requested:
-        _sleep_humanlike()
     core = fetch_item_preset("item-diagnose-core", item_id=item_id,
                               start_date=args.date, end_date=end,
                               cookies=cookies)
-    _sleep_humanlike()
     overview = fetch_item_preset("item-sale-overview", item_id=item_id,
                                   start_date=args.date, end_date=end,
                                   cookies=cookies)
@@ -819,9 +805,7 @@ def cmd_item_profile(args: argparse.Namespace) -> None:
     item_id = resolve_item_id(args, cookies=cookies)
 
     collected: dict[str, list[dict[str, Any]]] = {}
-    for i, dim in enumerate(dims):
-        if i:
-            _sleep_humanlike()
+    for dim in dims:
         collected[dim] = fetch_item_profile(
             item_id=item_id, date=args.date, profile_type=dim,
             crowds_type=crowds_type, cookies=cookies)
@@ -1010,7 +994,6 @@ def cmd_item_detail(args: argparse.Namespace) -> None:
     overview = _fetch_detail("/cc/item/detail/analysis/overview.json",
                               item_id=item_id, start_date=args.date,
                               end_date=end, cookies=cookies) or {}
-    _sleep_humanlike()
     floors = _fetch_detail("/cc/item/detail/analysis/list.json",
                             item_id=item_id, start_date=args.date,
                             end_date=end, cookies=cookies) or []
@@ -1082,10 +1065,8 @@ def cmd_item_price(args: argparse.Namespace) -> None:
 
     info = _fetch_price("/cc/item/price/info.json",
                          item_id=item_id, cookies=cookies) or {}
-    _sleep_humanlike()
     seg = _fetch_price("/cc/item/price/getCateId.json", item_id=item_id,
                         cookies=cookies, date_params=dr) or {}
-    _sleep_humanlike()
     bands = _fetch_price("/mc/item/price/band/info/v3.json", item_id=item_id,
                           cookies=cookies, date_params=dr) or []
 
@@ -1151,7 +1132,6 @@ def cmd_item_title(args: argparse.Namespace) -> None:
     words = _api_get("/cc/item/v2/getTitleWords.json",
                      dict(base, _=_now_ms()), cookies,
                      referer=f"{REFERER_ARCHIVES}?activeKey=title").get("data") or []
-    _sleep_humanlike()
     rec = _api_get("/cc/item/title/v2/word/recommend.json",
                    dict(base, _=_now_ms()), cookies,
                    referer=f"{REFERER_ARCHIVES}?activeKey=title").get("data") or {}
@@ -1220,7 +1200,6 @@ def cmd_item_bundle(args: argparse.Namespace) -> None:
 
     system = _api_get("/cc/item/bundle/recommend.json",
                       dict(base, _=_now_ms()), cookies, referer=ref).get("data") or []
-    _sleep_humanlike()
     seller_raw = _api_get("/cc/item/bundle/sellerRecommend.json",
                           dict(base, _=_now_ms(), order="desc",
                                orderBy=BUNDLE_SELLER_ORDER_BY),
@@ -1669,7 +1648,6 @@ def cmd_problem_alarm(args: argparse.Namespace) -> None:
     ref = "https://sycm.taobao.com/cc/problem_alarm"
     stats = _api_get("/cc/prolemitem/statistics.json",
                      _page_params(args, cookies), cookies, referer=ref).get("data") or {}
-    _sleep_humanlike()
     stock = _api_get("/cc/exp/stock/out.json",
                      _page_params(args, cookies), cookies, referer=ref).get("data") or {}
 

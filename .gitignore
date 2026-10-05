@@ -1,31 +1,9 @@
-# 运行产物（含真实店铺数据，永不提交）
-out-*.json
-*.chats.json
-scout-output/
-
-# Python
-__pycache__/
-*.py[cod]
-*.egg-info/
-.venv/
-venv/
+# 运行产物（含登录资料和店铺数据，不要分享）
 .runtime/
 .uv-python/
 .uv-cache/
 .python-packages/
-
-# macOS
+__pycache__/
+*.pyc
 .DS_Store
 ._*
-
-# Editors
-.vscode/
-.idea/
-
-# Secrets
-.env
-.env.*
-*.key
-
-# 隐私敏感词表(本地专用)
-.privacy-words

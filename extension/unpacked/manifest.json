@@ -1,0 +1,56 @@
+{
+  "manifest_version": 3,
+  "name": "taobao-cli 取数桥",
+  "short_name": "taobao-cli",
+  "version": "0.4.2",
+  "description": "只读取数桥，装一个就够：sycm-cli 生意参谋、alimama-cli 万相台、qianniu-cli 千牛、dmp-cli 达摩盘、1688 订单、taobao-voc 竞品评价都用它。不修改、不上传。更多工具：rakel.top/tools",
+  "minimum_chrome_version": "116",
+  "permissions": [
+    "scripting",
+    "tabs",
+    "alarms",
+    "storage",
+    "cookies"
+  ],
+  "host_permissions": [
+    "https://dmp.taobao.com/*",
+    "https://dmp.advgateway.taobao.com/*",
+    "https://myseller.taobao.com/*",
+    "https://sycm.taobao.com/*",
+    "https://one.alimama.com/*",
+    "https://air.1688.com/*",
+    "https://item.taobao.com/*",
+    "http://127.0.0.1/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://dmp.taobao.com/*",
+        "https://myseller.taobao.com/*",
+        "https://sycm.taobao.com/*",
+        "https://one.alimama.com/*",
+        "https://air.1688.com/*",
+        "https://work.1688.com/*",
+        "https://item.taobao.com/*",
+        "https://www.taobao.com/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "taobao-cli 取数桥",
+    "default_popup": "popup.html"
+  },
+  "icons": {
+    "16": "icons/16.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  },
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAv1Wj3ybqrVNTJUrBFnTnoOWBGXcrhLp5vjlbf6kROF77N3zIdV6A+e3uuZuLnMQUcn5+FC9LacxnEwId1YkO/uq3/I+RTd43VXNPaiWlhbpOCxQdSx4F49mpo8dDHAUD81F5rd+J8PuwCvW1ayLK4GWv1z/+NBJKqamrUqfbfjgR0pyubjB7gQLmKtEPLv/n3Ez0aJLQYt/AXh2jkHMTovuyDVJoKX+R7QYldKsBk/DM/tfJnS9dOTaUcFFbdyrkc/YT34WhjmHd4nmlvvOuFxDbkdSvIBcZiWJkYRBqOGacguR+PDSVv3A3dtS/ZHkJx0R9ztfHFgbmklfb5ssdswIDAQAB"
+}

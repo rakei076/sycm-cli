@@ -1,139 +1,32 @@
 #!/usr/bin/env python3
-"""sycm-cli — 生意参谋店铺数据与经营分析 CLI
+"""生意参谋店铺数据与经营分析命令：tb sycm <命令>。
 
-跨平台本地认证模型：
-- macOS: browser_cookie3 从已登录的 Chrome 直接读 taobao cookies
-- Windows: 专用 Chrome/Edge Profile + CDP 自动取得浏览器已解密 cookies
-- curl_cffi 伪 TLS 指纹直调 sycm API
-- 不导出 Cookie，不关闭浏览器安全保护，不接管用户默认 Profile
-
-稳定命令来自 sycm 页面请求与客户端 JS 的实际验证，覆盖大盘、商品、新品、
-销售、退款、客服与 Excel 导出。运行 ``--help`` 查看当前完整命令面。
+取数方式与其他平台一样（见 tb/core/transport.py）：浏览器插件优先；Mac 上没装插件就读 Chrome 的 cookie；
+请求、登录判断、风控词、护栏（请求数提醒 / 间隔）都在 tb.core 里，这里只放接口清单、参数拼装和输出。
+稳定命令来自 sycm 页面请求与客户端 JS 的实际验证，覆盖大盘、商品、新品、销售、退款、客服与 Excel 导出。
+运行 ``--help`` 查看当前完整命令面。
 """
 from __future__ import annotations
 
 import argparse
 import json
 import os
-import platform
-import random
-import shutil
-import socket
-# Used without a shell and only for the locally resolved Chrome/Edge binary.
-import subprocess  # nosec B404
 import sys
 import time
-import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-import browser_cookie3
-from curl_cffi import requests
+from ...core import profiles, transport
+from ...core.auth import NotLoggedIn, load_cookies
+from ...core.bridge import BridgeRefused
+from ...core.client import Client
+from ...core.errors import TbError
+from .platform import SYCM
 
-USER_AGENT = (
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/148.0.0.0 Safari/537.36"
-)
-
-API_BASE = "https://sycm.taobao.com/csp/api"
 REFERER_DETAIL_PAGE = "https://sycm.taobao.com/qos/service/frame/performance/detail/new"
-
-RISK_KEYWORDS = ("滑块", "验证码", "操作过于频繁", "请重新登录", "异常请求", "风控")
-
-# 安全护栏
-MIN_DELAY_SEC = 1.8
-MAX_DELAY_SEC = 3.5
-MAX_CONSECUTIVE_FAILS = 2
-# 请求数策略（建议性，不硬停）：
-#   达到 SOFT_WARN_AT 在 stderr 打一次温和提醒；不停止运行。
-#   如果你确实想加硬上限（比如脚本跑飞了想兜底），设环境变量 SYCM_REQUEST_LIMIT=数字。
-REQUEST_SOFT_WARN_AT = 200
-MAX_RETRIES = int(os.environ.get("SYCM_RETRIES", "2"))
-RETRY_BASE_SEC = float(os.environ.get("SYCM_RETRY_BASE_SEC", "1"))
-
-
-class RiskTriggered(RuntimeError):
-    pass
-
-
-def _sleep_humanlike() -> None:
-    # This jitter is traffic pacing, not a security token.
-    time.sleep(random.uniform(MIN_DELAY_SEC, MAX_DELAY_SEC))  # nosec B311
-
-
-def _has_login_cookie(cookies: dict[str, str]) -> bool:
-    return "_tb_token_" in cookies
-
-
-def _cookie_dict(items: list[dict[str, Any]]) -> dict[str, str]:
-    cookies: dict[str, str] = {}
-    # sycm.taobao.com 最后写入，使目标站点的同名 cookie 优先。
-    for target_domain in ("", "sycm.taobao.com"):
-        for cookie in items:
-            domain = str(cookie.get("domain") or "")
-            if "taobao.com" not in domain:
-                continue
-            if target_domain and target_domain not in domain:
-                continue
-            if not target_domain and "sycm.taobao.com" in domain:
-                continue
-            name = cookie.get("name")
-            value = cookie.get("value")
-            if name and value is not None:
-                cookies[str(name)] = str(value)
-    return cookies
-
-
-def _windows_state_dir() -> Path:
-    override = os.environ.get("SYCM_STATE_DIR")
-    if override:
-        return Path(override).expanduser()
-    root = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
-    if not root:
-        root = str(Path.home() / "AppData" / "Local")
-    return Path(root) / "sycm-cli"
-
-
-def _find_windows_browser() -> Path:
-    override = os.environ.get("SYCM_BROWSER_PATH")
-    candidates = [Path(override)] if override else []
-    for env_name in ("PROGRAMFILES", "PROGRAMFILES(X86)", "LOCALAPPDATA"):
-        base = os.environ.get(env_name)
-        if not base:
-            continue
-        candidates.extend([
-            Path(base) / "Google/Chrome/Application/chrome.exe",
-            Path(base) / "Microsoft/Edge/Application/msedge.exe",
-        ])
-    for name in ("chrome.exe", "msedge.exe", "chrome", "msedge"):
-        found = shutil.which(name)
-        if found:
-            candidates.append(Path(found))
-    for candidate in candidates:
-        if candidate.is_file():
-            return candidate
-    raise RuntimeError(
-        "未找到 Chrome 或 Edge。请安装浏览器，或设置 SYCM_BROWSER_PATH 指向 chrome.exe。"
-    )
-
-
-def _free_local_port() -> int:
-    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
-        sock.bind(("127.0.0.1", 0))
-        return int(sock.getsockname()[1])
-
-
-def _read_json(url: str, timeout: float = 1.5) -> Any:
-    parsed = urllib.parse.urlsplit(url)
-    if parsed.scheme != "http" or parsed.hostname not in {"127.0.0.1", "localhost", "::1"}:
-        raise ValueError("CDP JSON 地址必须是本机 HTTP 地址")
-    # URL is constrained to a local HTTP CDP endpoint above.
-    with urllib.request.urlopen(url, timeout=timeout) as response:  # nosec B310
-        return json.loads(response.read().decode("utf-8"))
 
 
 def _validated_https_url(url: str) -> str:
@@ -144,310 +37,59 @@ def _validated_https_url(url: str) -> str:
     return url
 
 
-def _cdp_targets(port: int) -> list[dict[str, Any]]:
-    try:
-        data = _read_json(f"http://127.0.0.1:{port}/json/list")
-        return data if isinstance(data, list) else []
-    except (OSError, urllib.error.URLError, ValueError):
-        return []
+class ClientCookies:
+    """给调用方一个像 dict 的「cookie 视图」：`cookies.get("_tb_token_", "")`。
+    实际读取走 client.cookie()——命令行读 cookie 模式读本地副本，插件模式向浏览器要（只放行平台声明的令牌类 cookie）。
+    读到的值缓存在本次运行里。"""
+
+    def __init__(self, client: Client):
+        self.client = client
+        self._cache: dict[str, str | None] = {}
+
+    def get(self, name: str, default: str | None = None) -> str | None:
+        if name not in self._cache:
+            try:
+                self._cache[name] = self.client.cookie(name)
+            except BridgeRefused:   # 插件模式下不是令牌类的 cookie 读不到，按「没有」处理
+                self._cache[name] = None
+        return self._cache[name] or default
+
+    def __contains__(self, name: str) -> bool:
+        return bool(self.get(name))
+
+    def __len__(self) -> int:
+        return len(self.client.cookies)
 
 
-def _wait_for_cdp(port: int, timeout: float = 15) -> list[dict[str, Any]]:
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        targets = _cdp_targets(port)
-        if targets:
-            return targets
-        time.sleep(0.25)
-    raise RuntimeError("Chrome 启动超时，未能建立自动登录连接。")
-
-
-def _cdp_cookies(port: int) -> dict[str, str]:
-    try:
-        from websocket import create_connection
-    except ImportError as exc:
-        raise RuntimeError("缺少 websocket-client，请重新运行安装命令。") from exc
-
-    targets = _wait_for_cdp(port)
-    target = next((t for t in targets if t.get("type") == "page"), targets[0])
-    ws_url = target.get("webSocketDebuggerUrl")
-    if not ws_url:
-        raise RuntimeError("Chrome 没有提供 CDP WebSocket 地址。")
-    ws = create_connection(ws_url, timeout=5, origin=f"http://127.0.0.1:{port}")
-    try:
-        ws.send(json.dumps({"id": 1, "method": "Network.getAllCookies"}))
-        while True:
-            message = json.loads(ws.recv())
-            if message.get("id") == 1:
-                if message.get("error"):
-                    raise RuntimeError(f"Chrome 读取 Cookie 失败：{message['error']}")
-                return _cookie_dict((message.get("result") or {}).get("cookies") or [])
-    finally:
-        ws.close()
-
-
-def _wait_for_windows_login(port: int, marker_file: Path) -> dict[str, str]:
-    print("首次使用或登录已过期，请在打开的浏览器中登录生意参谋；成功后会自动继续。", file=sys.stderr)
-    deadline = time.time() + int(os.environ.get("SYCM_LOGIN_TIMEOUT", "300"))
-    while time.time() < deadline:
-        cookies = _cdp_cookies(port)
-        if _has_login_cookie(cookies):
-            marker_file.touch()
-            return cookies
-        time.sleep(2)
-    raise RuntimeError("等待登录超时。请保留浏览器窗口，登录后重新运行命令。")
-
-
-def _windows_cdp_cookies() -> dict[str, str]:
-    state_dir = _windows_state_dir()
-    state_dir.mkdir(parents=True, exist_ok=True)
-    port_file = state_dir / "cdp-port"
-    marker_file = state_dir / "login-ready"
-
-    if port_file.exists():
-        try:
-            port = int(port_file.read_text(encoding="utf-8").strip())
-            cookies = _cdp_cookies(port)
-        except (OSError, ValueError, RuntimeError):
-            pass
-        else:
-            if _has_login_cookie(cookies):
-                return cookies
-            return _wait_for_windows_login(port, marker_file)
-
-    port = _free_local_port()
-    browser = _find_windows_browser()
-    profile_dir = state_dir / "chrome-profile"
-    args = [
-        str(browser),
-        f"--remote-debugging-port={port}",
-        "--remote-debugging-address=127.0.0.1",
-        "--remote-allow-origins=*",
-        f"--user-data-dir={profile_dir}",
-        "--no-first-run",
-        "--no-default-browser-check",
-        "--new-window",
-        REFERER_DETAIL_PAGE,
-    ]
-    if marker_file.exists():
-        args.insert(-2, "--start-minimized")
-    try:
-        # No shell is involved; browser is a resolved local executable and arguments are separate.
-        subprocess.Popen(  # nosec B603
-            args, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-        )
-    except OSError as exc:
-        raise RuntimeError(f"无法启动浏览器：{exc}") from exc
-    port_file.write_text(str(port), encoding="utf-8")
-    _wait_for_cdp(port)
-    return _wait_for_windows_login(port, marker_file)
-
-
-# ---------- 多店铺登录态（profile）----------
-# 与 qianniu-cli 共享同一目录，一份 profile 两个工具通用（都用 taobao.com 登录）。
-PROFILE_DIR = Path(
-    os.environ.get("TAOBAO_CLI_PROFILE_DIR", str(Path.home() / ".taobao-cli" / "profiles"))
-)
-
-# 由 main() 依据 --store 设置；非空时改读保存的 profile 而不是实时 Chrome。
+# 由 main() 依据 --store 设置；非空时改读保存的 profile 而不是实时浏览器。
 _ACTIVE_STORE: str | None = None
+_CLIENT: Client | None = None
 
 
-def _profile_path(name: str) -> Path:
-    if not name or any(sep in name for sep in ("/", "\\", "..")) or name.startswith("."):
-        raise ValueError(f"store 名只能是简单名字，不含路径分隔符：{name!r}")
-    return PROFILE_DIR / f"{name}.json"
+def make_client() -> Client:
+    if _ACTIVE_STORE:   # 保存的登录态：只用命令行读 cookie 的方式
+        return Client(SYCM, cookies=profiles.load_profile(SYCM, _ACTIVE_STORE))
+    return transport.make_client(SYCM)
 
 
-def save_taobao_profile(name: str, cookies: dict[str, str]) -> Path:
-    """把一份 taobao 登录 cookie 存成命名 profile（0600，仅本机）。"""
-    PROFILE_DIR.mkdir(parents=True, exist_ok=True)
-    try:
-        os.chmod(PROFILE_DIR, 0o700)
-    except OSError:
-        pass
-    path = _profile_path(name)
-    payload = {
-        "store": name,
-        "domain": "taobao.com",
-        "saved_at": datetime.now().isoformat(timespec="seconds"),
-        "cookies": cookies,
-    }
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    try:
-        os.chmod(path, 0o600)
-    except OSError:
-        pass
-    return path
+def load_taobao_cookies() -> ClientCookies:
+    """取当前应使用的登录态（一次运行只建一个连接）。"""
+    global _CLIENT
+    if _CLIENT is None:
+        _CLIENT = make_client()
+    return ClientCookies(_CLIENT)
 
 
-def load_taobao_profile(name: str) -> dict[str, str]:
-    path = _profile_path(name)
-    if not path.exists():
-        raise RuntimeError(
-            f"登录态 profile 不存在：{name}\n"
-            f"先在 Chrome 登录该店，再跑：sycm-cli export-profile {name}"
-        )
-    data = json.loads(path.read_text(encoding="utf-8"))
-    cookies = data.get("cookies") or {}
-    if "_tb_token_" not in cookies:
-        raise RuntimeError(
-            f"profile {name} 缺 _tb_token_（保存时可能未登录），请重新 export-profile。"
-        )
-    return cookies
-
-
-def list_taobao_profiles() -> list[dict[str, Any]]:
-    if not PROFILE_DIR.exists():
-        return []
-    out: list[dict[str, Any]] = []
-    for p in sorted(PROFILE_DIR.glob("*.json")):
-        try:
-            data = json.loads(p.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            continue
-        out.append({
-            "store": p.stem,
-            "saved_at": data.get("saved_at"),
-            "cookies": data.get("cookies") or {},
-        })
-    return out
-
-
-def _chrome_cookie_file() -> str | None:
-    """若设了 SYCM_CHROME_PROFILE（如 "Profile 1"），返回该 Chrome 身份的 Cookies 文件路径；
-    未设则返回 None，browser_cookie3 走默认身份不变。"""
-    prof = os.environ.get("SYCM_CHROME_PROFILE")
-    if not prof:
-        return None
-    p = Path.home() / "Library/Application Support/Google/Chrome" / prof / "Cookies"
-    return str(p)
-
-
-def _read_chrome_taobao_cookies() -> dict[str, str]:
-    """始终从实时浏览器读 taobao 域 cookie（export-profile 用它，不受 --store 影响）。
-    Windows 走独立 Chrome/Edge 的 CDP，macOS 直读 browser_cookie3。"""
-    if platform.system() == "Windows":
-        return _windows_cdp_cookies()
-    jar = browser_cookie3.chrome(domain_name="taobao.com", cookie_file=_chrome_cookie_file())
-    return {c.name: c.value for c in jar if c.domain and "taobao.com" in c.domain}
-
-
-def load_taobao_cookies() -> dict[str, str]:
-    """取当前应使用的登录态：--store 指定则读 profile，否则读实时浏览器（Windows 走 CDP）。"""
-    if _ACTIVE_STORE:
-        return load_taobao_profile(_ACTIVE_STORE)
-    cookies = _read_chrome_taobao_cookies()
-    if not _has_login_cookie(cookies):
-        raise RuntimeError(
-            "未找到淘宝登录态。请在 Chrome 里打开并登录 sycm.taobao.com 后重试。"
-            '若登录态在别的 Chrome 身份，设 SYCM_CHROME_PROFILE="Profile 1" 重试。'
-        )
-    return cookies
-
-
-def _check_risk(text: str) -> None:
-    for kw in RISK_KEYWORDS:
-        if kw in text and "618" not in text:
-            raise RiskTriggered(f"响应含 '{kw}'，立即停止")
-
-
-_request_count = 0
-_consecutive_fails = 0
-
-
-def _validate_business_response(payload: dict[str, Any]) -> None:
-    if payload.get("success") is False:
-        raise RuntimeError(
-            f"生意参谋业务失败 code={payload.get('code')}: "
-            f"{payload.get('message') or payload.get('msg') or ''}"
-        )
-    code = payload.get("code")
-    if code not in (None, 0, 200, "0", "200"):
-        raise RuntimeError(
-            f"生意参谋业务失败 code={code}: {payload.get('message') or payload.get('msg') or ''}"
-        )
-
-
-def _api_get(path: str, params: dict[str, Any], cookies: dict[str, str], referer: str | None = None) -> dict[str, Any]:
-    """对 sycm API 做一次 GET，带安全护栏。
+def _api_get(path: str, params: dict[str, Any], cookies: ClientCookies, referer: str | None = None) -> dict[str, Any]:
+    """对 sycm API 做一次 GET，返回完整响应。
 
     path 处理规则：
     - 以 `/` 开头 → 绝对路径，拼到 https://sycm.taobao.com 后
     - 否则 → 相对路径，拼到 https://sycm.taobao.com/csp/api/ 后（旧 CSP 接口）
     """
-    global _request_count, _consecutive_fails
-
-    # 软警告：达到阈值在 stderr 提醒一次，不停止
-    if _request_count == REQUEST_SOFT_WARN_AT:
-        print(
-            f"⚠️  已发出 {REQUEST_SOFT_WARN_AT} 次请求 — 大批量正常，但建议留意：风控通常按"
-            f"\"短时高频\"判断而不是\"总量\"，每个请求间隔 1.8~3.5 秒已经足够。继续运行。",
-            file=sys.stderr,
-        )
-    # 可选硬上限（环境变量），默认无
-    hard_limit_env = os.environ.get("SYCM_REQUEST_LIMIT")
-    if hard_limit_env and hard_limit_env.isdigit():
-        hard_limit = int(hard_limit_env)
-        if _request_count >= hard_limit:
-            raise RuntimeError(
-                f"达到自定义硬上限 SYCM_REQUEST_LIMIT={hard_limit}，停止。"
-                f"如要继续：unset SYCM_REQUEST_LIMIT 或调大它。"
-            )
-
-    hour = datetime.now().hour
-    if 1 <= hour < 6 and not os.environ.get("SYCM_BYPASS_CURFEW"):
-        raise RuntimeError(
-            f"夜间禁跑时段 (1:00–6:00)，当前 {hour} 点。"
-            f"如需强制运行：SYCM_BYPASS_CURFEW=1 ..."
-        )
-
-    if path.startswith("/"):
-        url = f"https://sycm.taobao.com{path}"
-    else:
-        url = f"{API_BASE}/{path}"
-    headers = {
-        "User-Agent": USER_AGENT,
-        "Referer": referer or REFERER_DETAIL_PAGE,
-        "Accept": "application/json, text/plain, */*",
-        "Accept-Language": "zh-CN,zh;q=0.9,ja;q=0.8,en;q=0.7",
-    }
-
-    last_error: Exception | None = None
-    for attempt in range(MAX_RETRIES + 1):
-        try:
-            resp = requests.get(
-                url, params=params, cookies=cookies, headers=headers,
-                impersonate="chrome120", timeout=15,
-            )
-            _request_count += 1
-        except requests.exceptions.RequestException as e:
-            last_error = e
-            if attempt < MAX_RETRIES:
-                time.sleep(RETRY_BASE_SEC * (2 ** attempt))
-                continue
-            break
-
-        if resp.status_code >= 500 and attempt < MAX_RETRIES:
-            last_error = RuntimeError(f"HTTP {resp.status_code}")
-            time.sleep(RETRY_BASE_SEC * (2 ** attempt))
-            continue
-        if resp.status_code != 200:
-            _consecutive_fails += 1
-            raise RuntimeError(f"HTTP {resp.status_code}: {resp.text[:200]}")
-        _check_risk(resp.text)
-        try:
-            payload = resp.json()
-        except Exception as e:
-            raise RuntimeError(f"响应非 JSON: {resp.text[:200]}") from e
-        _validate_business_response(payload)
-        _consecutive_fails = 0
-        return payload
-
-    _consecutive_fails += 1
-    raise RuntimeError(
-        f"请求失败，已重试 {MAX_RETRIES} 次: {last_error}"
-    ) from last_error
+    host, rel = ("root", path) if path.startswith("/") else ("api", "/" + path)
+    return cookies.client.get(host, rel, params, raw=True, name=path,
+                              headers={"Referer": referer or REFERER_DETAIL_PAGE})
 
 
 # ---------- 高频页面预设注册表 ----------
@@ -963,7 +605,6 @@ def fetch_chat_detail_all_pages(
         if not rows:
             break
         all_rows.extend(rows)
-        _sleep_humanlike()
     return all_rows
 
 
@@ -1064,7 +705,6 @@ def cmd_excel(args: argparse.Namespace) -> None:
         out_path = Path.home() / "Downloads" / "sycm-exports" / suggested
 
     print(f"[4/4] 下载到 {out_path} ...", file=sys.stderr)
-    import urllib.request
     # URL is constrained to HTTPS above.
     urllib.request.urlretrieve(url, out_path)  # nosec B310
     size_kb = out_path.stat().st_size / 1024
@@ -1094,7 +734,6 @@ def cmd_excel_tasks(args: argparse.Namespace) -> None:
                 proc = t.get("process", 0)
                 rec = t.get("recordNum", "?")
                 ts = t.get("gmtCreate", 0)
-                from datetime import datetime
                 ts_str = datetime.fromtimestamp(ts / 1000).strftime("%Y-%m-%d %H:%M") if ts else "?"
                 print(f"  [{t.get('id')}] {ts_str}  {status} {proc}%  {rec} 条")
         except Exception as e:
@@ -1105,10 +744,14 @@ def cmd_excel_tasks(args: argparse.Namespace) -> None:
 # ---------- 命令 ----------
 
 def cmd_doctor(args: argparse.Namespace) -> None:
-    print("== sycm-cli doctor ==")
+    print("== tb sycm doctor ==")
     try:
         cookies = load_taobao_cookies()
-        print(f"✓ 读到 {len(cookies)} 个 taobao 域 cookie")
+        print(f"✓ 读到 {len(cookies)} 个 taobao 域 cookie" if len(cookies)
+              else "✓ 通过浏览器插件取数（登录态在浏览器里，不读 cookie 文件）")
+        if not cookies.get("_tb_token_"):
+            print("✗ 没有 _tb_token_（请在浏览器里打开并登录 https://sycm.taobao.com，等首页加载完再试）")
+            sys.exit(1)
         print("✓ _tb_token_ = <present>")
         for k in ("cna", "t", "_m_h5_tk", "thw"):
             if k in cookies:
@@ -1152,7 +795,7 @@ def cmd_list(args: argparse.Namespace) -> None:
 
 
 def cmd_preset_list(args: argparse.Namespace) -> None:
-    """命名预设的列表查询：sycm-cli <preset-name> --date ... --limit N"""
+    """命名预设的列表查询：tb sycm <preset-name> --date ... --limit N"""
     end = args.end_date or args.date
     data = fetch_preset(args.preset_name, start_date=args.date, end_date=end,
                          page_no=args.page, page_size=args.limit)
@@ -1793,7 +1436,7 @@ def cmd_home_table(args: argparse.Namespace) -> None:
 
 
 def cmd_api(args: argparse.Namespace) -> None:
-    """通用 API 探测命令：sycm-cli api <path> --param key=val ..."""
+    """通用 API 探测命令：tb sycm api <path> --param key=val ..."""
     cookies = load_taobao_cookies()
     params: dict[str, str] = {
         "_": str(int(time.time() * 1000)),
@@ -1901,7 +1544,6 @@ def cmd_fetch_recent(args: argparse.Namespace) -> None:
             data_id = f"{r['dateId']}_{r['sellerId']}_{r['accountId']}_{r['buyerId']}"
         except KeyError:
             continue
-        _sleep_humanlike()
         print(f"[2/3] [{i}/{len(rows)}] 拉详情 {r.get('buyerNick')} ↔ {r.get('psnNickName')}", file=sys.stderr)
         messages = fetch_chat_detail_all_pages(data_id, cookies)
         sessions.append({
@@ -1938,10 +1580,12 @@ def cmd_fetch_recent(args: argparse.Namespace) -> None:
 # ---------- main ----------
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="sycm-cli", description=__doc__,
+    p = argparse.ArgumentParser(prog="tb sycm", description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     # 顶层 --store：用保存的登录态而不是实时 Chrome。放在子命令前，如
-    # sycm-cli --store 示例主店 sale-shop-list
+    # tb sycm --store 示例主店 sale-shop-list
+    p.add_argument("--mode", choices=["auto", "extension", "cookies"],
+                   help="取数方式：extension=浏览器插件；cookies=读浏览器登录；默认 auto")
     p.add_argument("--store", metavar="店名",
                    help="用 export-profile 保存的登录态（放在子命令前），而不是实时 Chrome")
     sp = p.add_subparsers(dest="cmd", required=True)
@@ -1977,7 +1621,7 @@ def build_parser() -> argparse.ArgumentParser:
     fr.add_argument("--out", help="输出到文件 (默认 stdout)")
     fr.set_defaults(func=cmd_fetch_recent)
 
-    ap = sp.add_parser("api", help="通用接口探测：sycm-cli api <path> --param k=v ...")
+    ap = sp.add_parser("api", help="通用接口探测：tb sycm api <path> --param k=v ...")
     ap.add_argument("path", help='接口路径，如 "/cc/item/isAuth.json" 或 "ww/consultation/detail/list"')
     ap.add_argument("--param", "-p", action="append", help="附加参数 key=value，可重复")
     ap.add_argument("--referer", help="自定义 Referer 头")
@@ -1989,7 +1633,7 @@ def build_parser() -> argparse.ArgumentParser:
     mn.add_argument("--out", help="写入文件")
     mn.set_defaults(func=cmd_menu)
 
-    import sycm_item
+    from . import item as sycm_item
     sycm_item.register(sp, yesterday)
 
     # 命名子命令：每个高频页面一个
@@ -2123,65 +1767,61 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def cmd_export_profile(args: argparse.Namespace) -> None:
-    """把当前 Chrome 的 taobao 登录态存成命名 profile，供 --store 复用。"""
-    cookies = _read_chrome_taobao_cookies()
-    if "_tb_token_" not in cookies:
-        raise RuntimeError(
-            "当前 Chrome 未检测到 taobao 登录态。请先在浏览器登录该店的 "
-            "sycm.taobao.com，等首页加载完再 export。"
-        )
-    path = save_taobao_profile(args.name, cookies)
+    """把当前浏览器的淘宝登录态存成命名 profile，供 --store 复用。"""
+    cookies = load_cookies(SYCM)   # 不受 --store 影响，始终读实时浏览器
+    path = profiles.save_profile(args.name, cookies)
     print(f"✓ 已保存登录态 '{args.name}' → {path}")
-    print(f"  含 {len(cookies)} 个 cookie。用法：sycm-cli --store {args.name} <命令>")
+    print(f"  含 {len(cookies)} 个 cookie。用法：tb sycm --store {args.name} <命令>")
     print("  该文件含长效登录凭据(权限 0600)；勿提交 git、勿外发。")
-    print("  提示：qianniu-cli 也读同一目录，这份 profile 两个工具通用。")
 
 
 def cmd_profiles(args: argparse.Namespace) -> None:
-    """列出已保存的登录态 profile 及新鲜度。"""
-    profiles = list_taobao_profiles()
-    if not profiles:
-        print(f"（暂无 profile。目录：{PROFILE_DIR}）")
-        print("保存：在 Chrome 登录某店后跑 sycm-cli export-profile <店名>")
+    """列出已保存的登录态 profile。"""
+    saved = profiles.list_profiles()
+    if not saved:
+        print(f"（暂无 profile。目录：{profiles.PROFILE_DIR}）")
+        print("保存：在浏览器登录某店后跑 tb sycm export-profile <店名>")
         return
-    print(f"已保存 {len(profiles)} 个登录态（{PROFILE_DIR}）：")
-    now = datetime.now()
-    for p in profiles:
-        h5tk = (p["cookies"] or {}).get("_m_h5_tk", "")
-        fresh = "?"
-        _, _, expire = h5tk.partition("_")
-        if expire.isdigit():
-            left = int(int(expire) / 1000 - now.timestamp())
-            fresh = "登录态新鲜" if left > 60 else "h5token 过期(sycm 用 _tb_token_ 仍可用)"
-        print(f"  - {p['store']:<16} 保存于 {p.get('saved_at') or '?'}  [{fresh}]")
+    print(f"已保存 {len(saved)} 个登录态（{profiles.PROFILE_DIR}）：")
+    for p in saved:
+        print(f"  - {p['store']:<16} 保存于 {p.get('saved_at') or '?'}")
 
 
-def main() -> None:
-    global _ACTIVE_STORE
-    # 中文 Windows 的 cmd/SSH 常为 GBK；帮助文本里的 emoji 不应让 CLI 崩溃。
+def _force_utf8() -> None:
+    """中文 Windows 的 cmd/SSH 常为 GBK；帮助文本里的 emoji 不应让 CLI 崩溃。统一用 UTF-8。"""
     for stream in (sys.stdout, sys.stderr):
-        if hasattr(stream, "reconfigure"):
-            stream.reconfigure(errors="replace")
-    args = build_parser().parse_args()
+        try:
+            stream.reconfigure(encoding="utf-8")
+        except (AttributeError, ValueError):
+            pass
+
+
+def main(argv: list[str] | None = None) -> int:
+    global _ACTIVE_STORE, _CLIENT
+    _force_utf8()
+    args = build_parser().parse_args(argv)
     _ACTIVE_STORE = getattr(args, "store", None)
+    _CLIENT = None
+    if getattr(args, "mode", None):
+        os.environ["SYCM_MODE"] = args.mode
     try:
         args.func(args)
-    except RiskTriggered as e:
-        print(f"\n⚠️  风险信号触发，已停止：{e}", file=sys.stderr)
-        sys.exit(2)
+        return 0
+    except SystemExit as e:
+        return int(e.code or 0)
+    except NotLoggedIn as e:
+        print(f"✗ {e}", file=sys.stderr)
+        return 2
+    except TbError as e:
+        print(f"✗ {e}", file=sys.stderr)
+        return e.exit_code
     except (RuntimeError, ValueError) as e:
         print(f"✗ {e}", file=sys.stderr)
-        sys.exit(1)
+        return 1
     except KeyboardInterrupt:
         print("\n中断", file=sys.stderr)
-        sys.exit(130)
+        return 130
 
 
 if __name__ == "__main__":
-    # 以脚本方式运行（python sycm_cli.py …，文档里的标准跑法）时，本文件的模块名是
-    # __main__。sycm_item 顶部的 `from sycm_cli import …` 会按名字再加载一份 sycm_cli，
-    # 于是 sycm_item 抛的是第二份的 RiskTriggered，而 main() 捕获的是 __main__ 这份——
-    # 两个类不是同一个对象，风控退出码会从 2 退化成 1（护栏契约失效）。
-    # 先把自己注册成 sycm_item 要找的那个名字，全进程只存在一份 sycm_cli。
-    sys.modules.setdefault("sycm_cli", sys.modules["__main__"])
-    main()
+    sys.exit(main())

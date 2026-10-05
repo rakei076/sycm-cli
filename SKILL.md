@@ -1,15 +1,26 @@
 ---
 name: sycm-cli
 description: 使用 sycm.taobao.com 的已登录本地浏览器读取淘宝/天猫自营店铺数据，生成标准报表并执行经营分析。覆盖首页大盘、销售、商品、新品、退款、接待、评价、客服对话、Excel 导出和多店铺登录态。当用户提到生意参谋、sycm、店铺数据、标准报表、店铺体检、日检、周复盘、测款、退货归因、客服质检、商品 360、新品追踪、下载店铺 Excel 或让 AI 分析店铺时使用。
+author: Rakel
+homepage: https://rakel.top
 ---
 
 # sycm-cli — 生意参谋数据与店铺分析 Skill
 
+> 本 Skill 作者：Rakel · 个人网站：https://rakel.top
+
 **适用人群**：淘宝/天猫店铺商家自己拉取自己店铺的客服聊天、评价、销售、商品等经营数据，用于内部分析。
 
 **前置条件**：
-- macOS Chrome 已登录 sycm.taobao.com；Windows 首次运行会自动打开专用 Chrome/Edge，登录一次即可
-- 已装 `uv`（或 `pip` + Python 3.8+）
+- Chrome 已登录 sycm.taobao.com
+- 已装取数桥插件（共用插件，别的店铺数据工具装过就不用再装）：Windows 必须；Mac 可选，不装就直接读 Chrome 的登录
+- 已装 `uv`（或 Python 3.10+）
+
+## 首次使用（拿到这个 skill 后第一件事，AI 先做这个）
+
+1. 运行 `scripts/sycm.sh doctor`（Windows：`scripts\sycm.cmd doctor`）。看到 `probe = ok` 就装好了，跳到下一节。
+2. 提示「没有连上浏览器插件」或插件「太旧」：带用户照 `extension/README.md` 装插件——`chrome://extensions` 打开开发者模式，「加载已解压的扩展程序」选本目录的 `extension/unpacked`（把这个文件夹的完整路径告诉用户）。别的工具装过、版本够新就不用再装。
+3. 提示没登录：请用户在同一个 Chrome 里打开 https://sycm.taobao.com 登录（账号密码由用户自己输入，你不要代填），再运行一次 doctor。
 
 ## 一句话用法
 
@@ -21,11 +32,11 @@ scripts/sycm.sh fetch-recent --date YYYY-MM-DD --limit 10 --out chats.json
 
 ## 工作机制
 
-参考 [twitter-cli](https://github.com/jackwener/twitter-cli) 的纯本地认证模型：
+纯本地运行，用浏览器里已经登录的账号：
 
-1. macOS 用 `browser_cookie3.chrome(domain_name='taobao.com')` 从 Chrome 直读 cookie；Windows 自动启动独立 Profile 的 Chrome/Edge，通过本机 CDP 读取浏览器已解密 cookie
-2. `curl_cffi` 伪 TLS 指纹（`impersonate='chrome120'`）直调 sycm API
-3. Windows 不读取默认 Profile、不导出 cookie，也不关闭 Chrome App-Bound Encryption 安全保护
+1. **装了插件**（Windows 必须）：命令行在本机 127.0.0.1 临时开一个小服务，插件在用户已登录的生意参谋页面里替它发只读请求，结果交回命令行。不读 cookie、不用专用浏览器。
+2. **Mac 没装插件**：用 `browser_cookie3` 从 Chrome 直读 cookie，`curl_cffi` 直调 sycm 接口。
+3. 不导出 cookie、不改浏览器设置、不关闭 Chrome 的安全保护。
 
 请求形态尽量贴近正常人工浏览，但仍然必须控制频率并遵守下面的安全护栏。
 
@@ -111,9 +122,9 @@ scripts/sycm.sh fetch-recent --date YYYY-MM-DD --limit 10 --out chats.json
 
 示例：
 ```bash
-sycm-cli sale-shop-list --date YYYY-MM-DD --limit 10
-sycm-cli evaluation-list --date YYYY-MM-DD --limit 20 --out eval.json
-sycm-cli reception-list --date YYYY-MM-DD --raw   # 输出原始 JSON
+scripts/sycm.sh sale-shop-list --date YYYY-MM-DD --limit 10
+scripts/sycm.sh evaluation-list --date YYYY-MM-DD --limit 20 --out eval.json
+scripts/sycm.sh reception-list --date YYYY-MM-DD --raw   # 输出原始 JSON
 ```
 
 ### 商品大类 (v0.4+) —— 商品排行 / 商品 360 / 品类 360 / 新品追踪
@@ -135,15 +146,15 @@ sycm-cli reception-list --date YYYY-MM-DD --raw   # 输出原始 JSON
 示例：
 ```bash
 # 看昨天销售前 10 商品 (商品排行)
-sycm-cli item-list --date YYYY-MM-DD --limit 10
+scripts/sycm.sh item-list --date YYYY-MM-DD --limit 10
 
 # 看品类 360（全行业品类销售）
-sycm-cli cate-list --date YYYY-MM-DD --limit 5
+scripts/sycm.sh cate-list --date YYYY-MM-DD --limit 5
 
 # 新品追踪 (3 个子接口)
-sycm-cli new-product-overview --date YYYY-MM-DD           # 总览
-sycm-cli new-product-list --date YYYY-MM-DD --limit 10    # 列表
-sycm-cli new-product-trend --date YYYY-MM-DD --raw        # 趋势
+scripts/sycm.sh new-product-overview --date YYYY-MM-DD           # 总览
+scripts/sycm.sh new-product-list --date YYYY-MM-DD --limit 10    # 列表
+scripts/sycm.sh new-product-trend --date YYYY-MM-DD --raw        # 趋势
 ```
 
 **字段值是嵌套对象，加 `--raw` 才能拿到对比指标**（cycleCrc=环比、syncCrc=同比）。摘要模式只显示 `.value`。
@@ -175,54 +186,54 @@ sycm-cli new-product-trend --date YYYY-MM-DD --raw        # 趋势
 
 ```bash
 # 1. 先拿商品 ID（支持标题关键词、商品ID、商品URL、货号）
-sycm-cli item-search 连衣裙 --limit 3
+scripts/sycm.sh item-search 连衣裙 --limit 3
 
 # 2. 单品总体面貌（核心指标 + 销售总览，都按 --date）
-sycm-cli item-360 --item-id 123456789 --date YYYY-MM-DD
+scripts/sycm.sh item-360 --item-id 123456789 --date YYYY-MM-DD
 
 # 3. 哪个 SKU 组合卖得动（近 30 天，--date 与 --end-date 相隔 30 天）
-sycm-cli item-sku-list --item-id 123456789 --date 起始 --end-date 结束 --limit 10
+scripts/sycm.sh item-sku-list --item-id 123456789 --date 起始 --end-date 结束 --limit 10
 
 # 3b. 换个视角：哪个尺码/颜色卖得动（网页「属性分析」表，同一份数据按属性聚合）
-sycm-cli item-sku-list --item-id 123456789 --date 起始 --end-date 结束 --by 尺码
+scripts/sycm.sh item-sku-list --item-id 123456789 --date 起始 --end-date 结束 --by 尺码
 
 # 3c. 现在该补哪个 SKU 的货（现有库存/售罄率/库存可售天数，当前快照，--date 不生效）
-sycm-cli item-sku-list --item-id 123456789 --live --limit 10
+scripts/sycm.sh item-sku-list --item-id 123456789 --live --limit 10
 
 # 4. 访客从哪来、哪个渠道转化差
-sycm-cli item-flow-source --item-id 123456789 --date YYYY-MM-DD --limit 10
+scripts/sycm.sh item-flow-source --item-id 123456789 --date YYYY-MM-DD --limit 10
 
 # 5. 为什么退、哪个 SKU / 哪个尺码退得多（近 30 天）
-sycm-cli item-refund --item-id 123456789 --date 起始 --end-date 结束 --limit 10
+scripts/sycm.sh item-refund --item-id 123456789 --date 起始 --end-date 结束 --limit 10
 
 # 12. 这个款的服务/售后有没有拖后腿
-sycm-cli item-service --item-id 123456789 --date 起始 --end-date 结束
+scripts/sycm.sh item-service --item-id 123456789 --date 起始 --end-date 结束
 
 # 11. 哪条视频真的带货
-sycm-cli item-content --item-id 123456789 --date 起始 --end-date 结束
+scripts/sycm.sh item-content --item-id 123456789 --date 起始 --end-date 结束
 
 # 10. 买了这个款的人还买了什么（配套餐用）
-sycm-cli item-bundle --item-id 123456789 --date YYYY-MM-DD
+scripts/sycm.sh item-bundle --item-id 123456789 --date YYYY-MM-DD
 
 # 9. 标题哪几个字是白占的
-sycm-cli item-title --item-id 123456789 --date YYYY-MM-DD
+scripts/sycm.sh item-title --item-id 123456789 --date YYYY-MM-DD
 
 # 8. 这个价位段值不值得待 —— 本款所在档的盘子多大、涨得多快
-sycm-cli item-price --item-id 123456789 --date YYYY-MM-DD
+scripts/sycm.sh item-price --item-id 123456789 --date YYYY-MM-DD
 
 # 7. 详情页哪一屏在掉人 + 跟同行比差在哪
-sycm-cli item-detail --item-id 123456789 --date YYYY-MM-DD --limit 20
+scripts/sycm.sh item-detail --item-id 123456789 --date YYYY-MM-DD --limit 20
 
 # 6b. 客户要跑去哪（含友商；人气值只有单日有）
-sycm-cli item-loss-risk --item-id 123456789 --date YYYY-MM-DD --limit 20
+scripts/sycm.sh item-loss-risk --item-id 123456789 --date YYYY-MM-DD --limit 20
 
 # 6. 买这个款的是谁（默认人群标签；--all 一次跑完 10 个维度）
-sycm-cli item-profile --item-id 123456789 --date YYYY-MM-DD
-sycm-cli item-profile --item-id 123456789 --date YYYY-MM-DD --by province
-sycm-cli item-profile --item-id 123456789 --date YYYY-MM-DD --all --limit 5
+scripts/sycm.sh item-profile --item-id 123456789 --date YYYY-MM-DD
+scripts/sycm.sh item-profile --item-id 123456789 --date YYYY-MM-DD --by province
+scripts/sycm.sh item-profile --item-id 123456789 --date YYYY-MM-DD --all --limit 5
 
 # 也可以不带 ID，直接按货号搜（命中唯一才继续）
-sycm-cli item-sku-list --search A1001 --by 颜色分类
+scripts/sycm.sh item-sku-list --search A1001 --by 颜色分类
 ```
 
 `--by <属性名>` 不传就出 SKU 组合明细（`skuName` 是"颜色分类:xx;尺码:xx"这种组合值）；传了就改走
@@ -304,12 +315,12 @@ sycm-cli item-sku-list --search A1001 --by 颜色分类
 | `interval-analysis` | 商品/宏观监控/商品区间分析 | 动销商品按价格带/支付件数/支付金额切开，各段商品数与占比（`--by` 切视角） | 吃 `--date` |
 
 ```bash
-sycm-cli spu-list    --date YYYY-MM-DD
-sycm-cli item-relate --date 起始 --end-date 结束 --limit 5
-sycm-cli video-list  --date 起始 --end-date 结束 --limit 20
-sycm-cli macro-monitor   # 实时，不用传日期
-sycm-cli problem-alarm   # 实时，不用传日期
-sycm-cli interval-analysis --date YYYY-MM-DD --by ordPqt   # 你的货集中在哪个价位
+scripts/sycm.sh spu-list    --date YYYY-MM-DD
+scripts/sycm.sh item-relate --date 起始 --end-date 结束 --limit 5
+scripts/sycm.sh video-list  --date 起始 --end-date 结束 --limit 20
+scripts/sycm.sh macro-monitor   # 实时，不用传日期
+scripts/sycm.sh problem-alarm   # 实时，不用传日期
+scripts/sycm.sh interval-analysis --date YYYY-MM-DD --by ordPqt   # 你的货集中在哪个价位
 ```
 
 这三个的参数都是从页面请求录来的，有几个反直觉的点（都已固定在代码里）：
@@ -336,12 +347,12 @@ sycm **首页 `/portal/home.htm`** 顶部那块官方口径大盘，独立的 `/
 | `grow-factor` | 首页/增长因子 | newPortalAdPayAmt(广告引导成交)、portalLivePayAmt(直播)、newItmPayAmt(新品)、mbrPayAmt(会员)、totalPromoSpend、tROI |
 
 ```bash
-sycm-cli home-overview --date YYYY-MM-DD          # 昨天的支付/访客/转化/退款率/加购
-sycm-cli home-table    --date 起始 --end-date 结束  # 多日并排大表(默认最近6天)，含较上一周期
-sycm-cli grow-factor   --date YYYY-MM-DD           # 广告引导/直播/新品/会员各贡献多少成交
-sycm-cli refund-origin-analysis --date YYYY-MM-DD  # 该日完结退款来自哪些付款日/退款场景
-sycm-cli refund-all-list --date YYYY-MM-DD --by case-end --raw  # 逐笔含订单号和原付款时间
-sycm-cli home-overview --date YYYY-MM-DD --raw     # 拿全 self/rivalAvg/rivalGood + cycleCrc 环比
+scripts/sycm.sh home-overview --date YYYY-MM-DD          # 昨天的支付/访客/转化/退款率/加购
+scripts/sycm.sh home-table    --date 起始 --end-date 结束  # 多日并排大表(默认最近6天)，含较上一周期
+scripts/sycm.sh grow-factor   --date YYYY-MM-DD           # 广告引导/直播/新品/会员各贡献多少成交
+scripts/sycm.sh refund-origin-analysis --date YYYY-MM-DD  # 该日完结退款来自哪些付款日/退款场景
+scripts/sycm.sh refund-all-list --date YYYY-MM-DD --by case-end --raw  # 逐笔含订单号和原付款时间
+scripts/sycm.sh home-overview --date YYYY-MM-DD --raw     # 拿全 self/rivalAvg/rivalGood + cycleCrc 环比
 ```
 
 指标值是 `{value, cycleCrc}` 结构，摘要模式显示值，`--raw` 拿环比。**用"日"口径取稳定汇总，别用实时(实时数据盘中会跳)。**
@@ -358,14 +369,14 @@ sycm-cli home-overview --date YYYY-MM-DD --raw     # 拿全 self/rivalAvg/rivalG
 
 ### 多店铺登录态（v0.5+）—— 一台机器管多个店
 
-默认读实时 Chrome 的登录态（单店）。要管多个店，把每个店的登录态存成命名 profile：
+默认用浏览器里实时的登录（单店）。要管多个店，把每个店的登录态存成命名 profile（**仅 Mac**：Windows 读不到 Chrome 的登录，换店就在 Chrome 里换账号登录）：
 
 ```bash
 # 1. 在 Chrome 登录 A 店的 sycm，存下来
-sycm-cli export-profile 示例主店
+scripts/sycm.sh export-profile 示例主店
 # 2. 之后任何命令加 --store 切换（放在子命令前）
-sycm-cli --store 示例主店 home-overview --date YYYY-MM-DD
-sycm-cli profiles                    # 看已存哪些店 + 新鲜度
+scripts/sycm.sh --store 示例主店 home-overview --date YYYY-MM-DD
+scripts/sycm.sh profiles                    # 看已存哪些店 + 新鲜度
 ```
 
 - profile 存在 `~/.taobao-cli/profiles/`(0600 权限，含长效登录凭据，**勿提交 git**)。
@@ -379,16 +390,16 @@ sycm-cli profiles                    # 看已存哪些店 + 新鲜度
 
 ```bash
 # 下昨天的商品销售 Excel (最高频用法)
-sycm-cli excel sale-shop-list
+scripts/sycm.sh excel sale-shop-list
 
 # 下指定日期范围 + 指定输出位置
-sycm-cli excel evaluation-list --date YYYY-MM-DD --end-date YYYY-MM-DD --out /tmp/eval.xlsx
+scripts/sycm.sh excel evaluation-list --date YYYY-MM-DD --end-date YYYY-MM-DD --out /tmp/eval.xlsx
 
 # 下旺旺接待对话明细
-sycm-cli excel reception-list --date YYYY-MM-DD
+scripts/sycm.sh excel reception-list --date YYYY-MM-DD
 
 # 看最近的导出任务列表（含失败/排队中的）
-sycm-cli excel-tasks
+scripts/sycm.sh excel-tasks
 ```
 
 支持导出的 preset：`reception-list / evaluation-list / sale-shop-list / sale-item-list / sale-cs-list / inquiry-loss-list / slow-rsps-list`
@@ -410,12 +421,12 @@ OSS 临时链接 1 小时有效；过期需重新跑命令。
 ### 通用接口探测（高级）
 
 ```bash
-sycm-cli api <path> --param key=val --param key2=val2
+scripts/sycm.sh api <path> --param key=val --param key2=val2
 ```
 
 用来探索还没封装为子命令的接口。例如：
 ```bash
-sycm-cli api ww/consultation/detail/list \
+scripts/sycm.sh api ww/consultation/detail/list \
   -p startDate=YYYYMMDD -p endDate=YYYYMMDD -p dateType=day \
   -p dateRange=day -p orderBy=startTime -p pageNo=1 -p pageSize=10
 ```
@@ -424,7 +435,6 @@ sycm-cli api ww/consultation/detail/list \
 
 | 变量 | 作用 |
 |---|---|
-| `SYCM_BYPASS_CURFEW=1` | 强制跑（绕过 1:00–6:00 夜禁），仅自己调试用 |
 | `SYCM_REQUEST_LIMIT=N` | 可选硬上限：达到 N 次请求停止（默认无；只是兜底防脚本跑飞）|
 
 ## 输出 schema
@@ -472,68 +482,13 @@ CLI 内置的护栏分两层：
 **硬约束**（确认是风险信号才停，不会因日常使用误触）：
 - 检测响应含 `滑块` / `验证码` / `操作过于频繁` / `请重新登录` → 立即终止，抛 `RiskTriggered` 退出码 2
 - 连续 2 次 HTTP 失败 → 立即终止（连续失败大概率是登录态过期或网络挂了）
-- 夜间 1:00 – 6:00 默认禁跑（行为风控敏感时段）— 调试可加 `SYCM_BYPASS_CURFEW=1`
 
 **软建议**（不停止，只在 stderr 提示）：
 - 请求间隔随机 1.8 ~ 3.5 秒（接近人工）
 - 累计 200 次请求时打一次提醒（风控按"短时高频"判定，不按"总量"，所以 200 不是上限只是个提示点）
 - 如需硬性兜底（防脚本跑飞），设 `SYCM_REQUEST_LIMIT=N`
 
-**触发 `RiskTriggered` 时绝对不要重试**。重试只会让风控升级，等 24 小时再用。
-
-## 反编译笔记（接口情报）
-
-接口来源：`https://g.alicdn.com/aligenius/customer-service-performance/100.0.39/index.js` 反编译（公开 CDN，无需登录）。
-
-**列表接口**：
-```
-GET https://sycm.taobao.com/csp/api/ww/consultation/detail/list
-  ?_=<timestamp_ms>
-  &token=<_tb_token_ cookie 值>
-  &startDate=YYYYMMDD   (注意是 YYYYMMDD 不是 YYYY-MM-DD)
-  &endDate=YYYYMMDD
-  &dateType=day
-  &dateRange=day
-  &orderBy=startTime    ← 必需，漏掉返回 0 条（这是个坑）
-  &pageNo=1
-  &pageSize=10
-```
-
-**详情接口**：
-```
-GET https://sycm.taobao.com/csp/api/detail/list
-  ?dataId=<dateId>_<sellerId>_<accountId>_<buyerId>
-  &dateType=1&dateRange=1&startDate=1&endDate=1
-  &pageNo=<n>
-```
-
-每页约 10 条消息，>10 条需翻页，直到 `data.dataSource:[]`。
-
-**dataId 拼接规则**：列表 row 不直接给 `dataId` 字段，必须从 4 个字段拼接：
-
-```python
-data_id = f"{row['dateId']}_{row['sellerId']}_{row['accountId']}_{row['buyerId']}"
-```
-
-**鉴权**：纯 cookie + URL 参数 `token=<_tb_token_>` + `_=<毫秒时间戳>`。**无动态 sign，无加密**。
-
-## 可扩展接口（同套鉴权机制）
-
-反编译同时挖出 **183 个 sycm 服务模块接口**，全部用同样的 cookie + token 鉴权，按需扩展子命令：
-
-- `ww/sale/detail/list` — 旺旺销售明细
-- `effective/Reception/detail/list` — 有效接待明细
-- `reception/filtering/detail/list` — 接待过滤明细
-- `slow/rsps/detail/list` — 慢响应明细
-- `long/rcpt/detail/list` — 长接待明细
-- `evaluation/detail/list` — 评价明细
-- `inquiry/loss/list` — 询单流失
-- `serv/sale/analysis/list` — 服务销售分析
-- `user/duty/analyse/list` — 客服值班分析
-- `core/monitor/list` — 实时监控
-- `shop/refund/core/summary` — 店铺退款核心数据
-- `refund/complaint/detail/list` — 退款投诉明细
-- 等等...
+作者自己的店每天都在用，正常范围内的查询基本没遇到过风控；淘宝的风控通常只是弹一个验证提醒。**触发 `RiskTriggered` 时停下，请用户在浏览器里打开生意参谋过一下验证，再继续**，不要连着重试。
 
 ## AI 代理调用示例
 
@@ -541,8 +496,7 @@ data_id = f"{row['dateId']}_{row['sellerId']}_{row['accountId']}_{row['buyerId']
 
 ```bash
 DATE=$(date -v-1d +%Y-%m-%d)
-uv run --with browser-cookie3 --with curl-cffi python ~/.claude/skills/sycm-cli/sycm_cli.py \
-  fetch-recent --date $DATE --limit 10 --out /tmp/sycm-$DATE.json
+scripts/sycm.sh fetch-recent --date $DATE --limit 10 --out /tmp/sycm-$DATE.json
 
 # 然后读 /tmp/sycm-$DATE.json，逐个会话做分析
 ```
@@ -555,7 +509,7 @@ uv run --with browser-cookie3 --with curl-cffi python ~/.claude/skills/sycm-cli/
 
 ## 字段字典与发现方法论（v0.6+，AI 取数主力走这里）
 
-**主力不是背命令，是查字典。** 仓库根目录 `fields.json` 是机器可读字段字典，每条 = `字段码 → {cn 中文名, scope 适用命令, fmt 格式, status, note 口径备注}`。数据概览 62 个原始字段全部入册（32 个已破译 `verified` + 30 个中文名待破译 `candidate`）。
+**主力不是背命令，是查字典。** `tb/platforms/sycm/fields.json` 是机器可读字段字典，每条 = `字段码 → {cn 中文名, scope 适用命令, fmt 格式, status, note 口径备注}`。数据概览 62 个原始字段全部入册（32 个已破译 `verified` + 30 个中文名待破译 `candidate`）。
 
 **标准取数动线：**
 1. **先读 `fields.json`** 找字段码 + 它的 `note`（口径警告）
@@ -564,22 +518,12 @@ uv run --with browser-cookie3 --with curl-cffi python ~/.claude/skills/sycm-cli/
 
 `status: candidate` 的字段中文名尚未破译（`cn` 暂等于字段码），用前先验证；`note` 里的口径警告**必须遵守**（见下方坑规矩）。
 
-### 发现方法论三招（字典里没有的字段，按成本从低到高）
-
-1. **翻响应自带元数据**：sycm 列表类接口（`refund-item-list` 等）响应 `data.columns` **自带字段码+中文名**，`--raw` 拉一次全收 —— 这是 sycm 侧最省事的一招。
-2. **`queryFieldIn` 试探**（姊妹 CLI alimama 侧）：候选字段码塞进请求，返回带值=接口认，试错零损失。
-3. **网页对照**：登录网页找到目标指标，拿网页显示的数值/百分比当答案纸，`--raw` 全量拉回后按数值反查字段码。数据概览 32 项就是用**较上一周期百分比（cycleCrc）对照法**逐格锁定的。
-
-### 写回规矩（越用字典越厚）
-
-三招探出新字段并**实测核准后**，必须把 `candidate` 升级为 `verified` 写回 `fields.json`（`cn` 填真中文名，`note` 附验证日期与方法）；试探失败的记 `rejected`。**`fields.json` 永不含真实数值/店名**，可进公共库。
-
 ### 坑规矩（口径警告，写数前必看）
 
 - **退款率（支付时间口径，`payAmtRfdRate`/`ordRfdRate`/`payShopRfdAmt`）**：近 7 天数值仍在爬升（实测 T-6 仍未长完），**分析禁止用近 7 天下结论**。看真实退货率要等旧日期结算，或用店主自己的现金回收账本。
 - **签收退款率（`realPayrealRfdRate`）**：**T-3 才出值，两周以上才稳定**，近几天显示 `-` 是正常的。
 
-> 配套工具：**alimama-cli**（万相台广告投放数据）同样有 `fields.json` 字典 + 三招方法论，店铺体检 + 广告复盘两个一起用。
+> 配套工具：**alimama-cli**（万相台广告投放数据）同样有 `fields.json` 字典，店铺体检 + 广告复盘两个一起用。
 
 ---
 
@@ -589,21 +533,19 @@ uv run --with browser-cookie3 --with curl-cffi python ~/.claude/skills/sycm-cli/
 |---|---|---|
 | `doctor` 报"未找到淘宝登录态" | Chrome 没登录 sycm 或被另一个 Chrome 锁定 cookie 文件 | 打开 Chrome 登录 sycm.taobao.com 一次；登录态在别的 Chrome 身份时设 `SYCM_CHROME_PROFILE="Profile 1"` |
 | `list` 返回 0 条 | 漏传 `orderBy=startTime` 参数 | CLI 已内置，正常情况不会遇到 |
-| `RiskTriggered: 滑块` | sycm 触发风控 | 立即停 24 小时，不要重试 |
+| `RiskTriggered: 滑块` | sycm 弹了验证 | 停下，请用户在浏览器里打开生意参谋过一下验证，再继续 |
 | HTTP 5810 | session 超时 | 重新打开 Chrome 登录 sycm |
-| Windows 首次运行打开 Chrome/Edge | 正在创建专用登录环境 | 登录一次，CLI 会自动检测并继续 |
-| Windows 等待登录超时 | 5 分钟内没有完成登录 | 登录后重跑；可调整 `SYCM_LOGIN_TIMEOUT` |
-| Windows 找不到浏览器 | 未安装在常规路径 | 设置 `SYCM_BROWSER_PATH` 指向 Chrome/Edge exe |
-| Windows 报 `AppData\Roaming\uv\python: 拒绝访问` | AI 沙箱只允许访问工作区 | 更新 CLI 后运行 `scripts\sycm.cmd doctor`；新版会把 Python、依赖和登录 Profile 放在项目内 |
-
-Windows 的 `.runtime/` 包含登录 Profile，已被 Git 忽略；不要提交、打包或分享。
+| 「没有连上浏览器插件」 | 插件没装、被停用，或 Chrome 没开 | 照 `extension/README.md` 装好；插件每 30 秒检查一次，等一会儿再试 |
+| 插件「太旧」或「文件夹不见了」 | 装的是旧版，或当初加载的文件夹被删了 | `chrome://extensions` 移除旧的取数桥，再加载本目录的 `extension/unpacked` |
+| Windows 报 `AppData\Roaming\uv\python: 拒绝访问` | AI 沙箱只允许访问工作区 | 运行 `scripts\sycm.cmd doctor`；Python、依赖和运行数据都放在本目录的 `.runtime/` 里 |
 
 ## 文件清单
 
-- `sycm_cli.py` — 主 CLI
-- `sycm_item.py` — 商品板块命令（`item-*` 五件套）；参数拼装/护栏/cookie 全复用 `sycm_cli`
-- `fields.json` — 机器可读字段字典（字段码 → 中文名 / 适用命令 / 口径备注）
-- `format_chats.py` — JSON → Markdown 报告格式化（可选）
+- `scripts/sycm.sh` / `scripts/sycm.cmd` — 入口（Mac / Windows）
+- `tb/platforms/sycm/` — 生意参谋的命令（`cli.py`）、商品板块（`item.py`）、字段字典（`fields.json`）
+- `tb/core/` — 共用取数底座：插件桥、登录、请求和护栏
+- `extension/unpacked` — 取数桥插件；`extension/README.md` 是安装说明
+- `references/analysis-workflows.md` — 分析模块的规则
 - `requirements.txt` — Python 依赖（browser-cookie3, curl-cffi, websocket-client）
 
 ## 局限性
@@ -611,4 +553,4 @@ Windows 的 `.runtime/` 包含登录 Profile，已被 Git 忽略；不要提交�
 - 只覆盖了"旺旺咨询明细"（接待明细页）。其他 180+ 接口待按需扩展
 - 详情接口每页最多 10 条消息，CLI 自动翻页处理
 - 列表 `pageSize` 实测最大约 20，过大会被服务端截断
-- macOS Cookie 写在 Chrome Default profile，多 Profile 时可能要指定 `cookie_file`；Windows 使用独立的 `sycm-cli` Profile
+- Mac 不装插件时读 Chrome Default 资料的 cookie，登录在别的资料时设 `SYCM_CHROME_PROFILE="Profile 1"`；Windows 只走插件
