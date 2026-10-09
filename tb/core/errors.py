@@ -37,5 +37,10 @@ class RiskStopped(TbError):
     exit_code = 3
 
 
+class Redirected(TbError):
+    """平台没回数据，而是把请求转去了别的页面（排队页或登录页）。按「被平台拦截」处理。"""
+    exit_code = 3
+
+
 class WriteBlocked(TbError):
     exit_code = 1

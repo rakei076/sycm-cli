@@ -1751,5 +1751,75 @@
     "fmt": "epoch_ms",
     "status": "verified",
     "note": "毫秒时间戳，渲染时转 YYYY-MM-DD（2026-08-07）"
+  },
+  "fCharge": {
+    "cn": "推广花费",
+    "scope": [
+      "item-360",
+      "item-report"
+    ],
+    "fmt": "amt",
+    "status": "candidate",
+    "note": "2026-10-08 /cc/item/sale/trend.json 和 /cc/item/sale/overview.json 实测：pDROI = 支付金额 ÷ 本字段；数值与该商品付费推广的量级一致。未在页面上逐项核对，标 candidate"
+  },
+  "pDROI": {
+    "cn": "推广直接投产比（推测）",
+    "scope": [
+      "item-360",
+      "item-report"
+    ],
+    "fmt": "num",
+    "status": "candidate",
+    "note": "2026-10-08 商品趋势实测：成交来自付费的那天 = 支付金额 ÷ fCharge，成交不是来自付费的那天为 0，推测是推广直接成交 ÷ 推广花费。未核对，item-report 不用它"
+  },
+  "newPayByrCnt": {
+    "cn": "支付新买家数",
+    "scope": [
+      "item-360",
+      "item-report"
+    ],
+    "fmt": "int",
+    "status": "candidate",
+    "note": "2026-10-08 商品趋势/单品汇总实测：与 payOldByrCnt 相加等于 payByrCnt"
+  },
+  "crtByrCnt": {
+    "cn": "下单买家数",
+    "scope": [
+      "item-360",
+      "item-report"
+    ],
+    "fmt": "int",
+    "status": "candidate",
+    "note": "2026-10-08 商品趋势实测：crt = 下单（create），与支付买家数相近、略大"
+  },
+  "crtAmt": {
+    "cn": "下单金额",
+    "scope": [
+      "item-360",
+      "item-report"
+    ],
+    "fmt": "amt",
+    "status": "candidate",
+    "note": "同 crtByrCnt"
+  },
+  "crtItmQty": {
+    "cn": "下单件数",
+    "scope": [
+      "item-360",
+      "item-report"
+    ],
+    "fmt": "int",
+    "status": "candidate",
+    "note": "同 crtByrCnt"
+  },
+  "crtRate": {
+    "cn": "下单转化率",
+    "scope": [
+      "item-360",
+      "item-report"
+    ],
+    "fmt": "pct",
+    "status": "candidate",
+    "note": "同 crtByrCnt"
   }
 }

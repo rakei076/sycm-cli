@@ -12,10 +12,11 @@ import random
 import time
 from typing import Any
 
-from .errors import ApiFailed, EmptyResult, LoginExpired, RetryRequest, RiskStopped, TbError, WriteBlocked
+from .errors import ApiFailed, EmptyResult, LoginExpired, Redirected, RetryRequest, RiskStopped, TbError, WriteBlocked
 from .platform import Platform
 
 TIMEOUT = 60
+EMPTY_RETRY_WAIT = 4.0   # 平台回空内容时，第几次重发就等几倍这么多秒
 RETRIES = 2
 
 __all__ = ["Client", "TbError", "LoginExpired", "ApiFailed", "EmptyResult", "RiskStopped", "WriteBlocked"]
@@ -30,6 +31,18 @@ def _dig(data: Any, path: str) -> Any:
         else:
             return None
     return data
+
+
+def _landed(resp, requested: str) -> str:
+    """请求被平台转去了别处时，返回落地地址（域名 + 路径，不带参数）；没被转走返回空。"""
+    from urllib.parse import urlsplit
+    final = getattr(resp, "url", "") or ""
+    if not final:
+        return ""
+    a, b = urlsplit(str(final)), urlsplit(requested)
+    if (a.netloc, a.path) == (b.netloc, b.path):
+        return ""
+    return a.netloc + a.path
 
 
 class Client:
@@ -101,10 +114,12 @@ class Client:
             try:
                 merged = {"Referer": p.referer, "Accept": "application/json, text/plain, */*", **(headers or {})}
                 if method == "POST":
-                    resp = self.session.post(url, params=params, json=body if body is not None else {}, timeout=TIMEOUT,
+                    resp = self.session.post(url, params=params, json=body if body is not None else {}, timeout=p.post_timeout,
                                              headers={"Content-Type": "application/json", **merged})
                 else:
                     resp = self.session.get(url, params=params, timeout=TIMEOUT, headers=merged)
+            except TbError:
+                raise                 # 已经判断清楚的错误（如被平台转走）不重试
             except Exception as exc:  # 网络错误重试
                 if getattr(exc, "no_retry", False):  # 浏览器插件超时/被拒：重试没意义
                     raise TbError(str(exc), endpoint=label, stage="浏览器插件",
@@ -112,8 +127,12 @@ class Client:
                 last_exc = exc
                 time.sleep(1 + attempt)
                 continue
-            if resp.status_code >= 500 and attempt < retries:
+            if resp.status_code >= 500 and attempt < retries and method == "GET":   # 查询类 POST 不重试：重的一次就要等一分钟
                 time.sleep(1 + attempt)
+                continue
+            # 空内容：请求太密被限流时也会这样（登录明明有效），先歇几秒重发，别一上来就判成登录失效
+            if resp.status_code == 200 and not (resp.text or "").strip() and attempt < retries and method == "GET":
+                time.sleep(EMPTY_RETRY_WAIT * (attempt + 1))
                 continue
             break
         else:
@@ -121,14 +140,25 @@ class Client:
         self.request_count += 1
         self._last = time.time()
 
+        if resp.status_code in (502, 503, 504):   # 回的是网关的错误页，不是登录问题
+            raise ApiFailed(f"{p.display}服务端超时或繁忙（HTTP {resp.status_code}）。", endpoint=label, stage="平台返回",
+                            hint="过一会儿再试；同一项一直这样，就先跳过它。")
         if resp.status_code == 403:
             raise LoginExpired("登录已失效（HTTP 403）。", endpoint=label, stage="登录检查", hint=self.login_hint)
         text = resp.text or ""
         if not text.strip():
-            raise LoginExpired("平台返回了空内容，通常是没登录或登录已过期。", endpoint=label, stage="登录检查", hint=self.login_hint)
+            raise ApiFailed("平台连续返回空内容。多半是短时间里请求太密被平台限流，也可能是登录过期了。", endpoint=label,
+                            stage="平台返回", hint=f"过几分钟再试；一直这样，在浏览器里打开 {p.login_page} 确认已登录。")
         try:
             payload = json.loads(text)
         except ValueError:
+            landed = _landed(resp, url)
+            if landed and "login" in landed.lower():
+                raise LoginExpired(f"平台把请求转到了登录页（{landed}），登录已失效。", endpoint=label,
+                                   stage="登录检查", hint=self.login_hint) from None
+            if landed:
+                raise Redirected(f"{p.display}没有回数据，而是把请求转到了 {landed}（多半是排队页）。", endpoint=label, stage="平台返回",
+                                 hint=f"在浏览器里打开{p.display}看一下：显示排队就过一会儿再试。") from None
             raise LoginExpired("平台返回的不是数据而是网页，通常是登录或 csrf 失效。", endpoint=label,
                                stage="登录检查", hint=self.login_hint) from None
         if resp.status_code >= 400:
@@ -186,7 +216,7 @@ class Client:
             if getattr(self.session, "read_only", False):
                 raise WriteBlocked("现在是通过浏览器插件取数，插件只读，不能执行这个操作。", endpoint=label, stage="只读检查",
                                    hint=f"请在{p.display}网页里手动操作；或设置 {p.env_prefix}_MODE=cookies 改为直接读 Chrome 的 cookie 后重试（仅 Mac）。")
-        elif p.write_re.search(bare):
+        elif bare not in p.read_allow and p.write_re.search(bare):
             raise WriteBlocked("这个接口看起来是写操作，读取通道已拒绝调用。", endpoint=label, stage="只读检查")
         self.whoami()
         clean = {k: v for k, v in (params or {}).items() if v is not None}
@@ -204,7 +234,7 @@ class Client:
         if not path.startswith("/"):
             path = "/" + path
         label = name or f"{host} {path}"
-        if self.platform.write_re.search(path):
+        if path not in self.platform.read_allow and self.platform.write_re.search(path):
             raise WriteBlocked("这个接口看起来是写操作，本工具只读，已拒绝调用。", endpoint=label, stage="只读检查")
         self.whoami()
         clean = {k: v for k, v in (params or {}).items() if v is not None}

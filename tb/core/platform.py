@@ -23,8 +23,10 @@ class Platform:
     env_prefix: str                  # "DMP"
     session_cookie_domain: str = ".taobao.com"
     allow_post: bool = False                            # 是否允许 client.post
-    bridge_posts: tuple[str, ...] = ()                  # 走插件时允许的只读 POST 接口（精确路径）；插件 SITES 里的 POSTS 必须一样
+    post_timeout: float = 60                            # 查询类 POST 最多等多久（秒）；达摩盘个别重标签约 61 秒才回 504
+    bridge_posts: tuple[str | re.Pattern, ...] = ()     # 走插件时允许的只读 POST 接口：精确路径，带编号的用正则（整段匹配）；插件 SITES 里的 POSTS 必须一样
     write_allow: tuple[str, ...] = ()                   # 唯一允许的写接口（精确路径）；只有 client.post(write=True) 能调，且不自动重试
+    read_allow: tuple[str, ...] = ()                    # 名字会被 write_re 误拦、但核实过是只读的接口（精确路径）；插件 SITES 里的 READS 必须一样
     risk_words: tuple[str, ...] = ("滑块", "验证码", "操作过于频繁", "请重新登录", "异常请求")
     risk_exempt: tuple[str, ...] = ()                   # 响应里出现这些词就不按风控词判断（如「618」活动文案里带「风控」）
     delay: tuple[float, float] = (0.8, 1.6)             # 请求之间的随机间隔（秒）
@@ -37,6 +39,11 @@ class Platform:
     build_request: Callable[[Any, str, str, dict], tuple[str, dict, dict]] | None = None
     # 业务层检查：(client, payload, resp, label)，失败时抛 tb.core.errors 里的错误；要重发时抛 RetryRequest
     check_payload: Callable[[Any, Any, Any, str], None] | None = None
+    extension_only: bool = False                        # 只走浏览器插件，不退回读本机 Chrome 的 cookie（竞品评价：读 cookie 要系统权限，交付不可行）
+    min_extension: str | None = None                    # 这个平台要求的最低插件版本（插件里新加了它的放行规则时填）；不填 = 底座的默认要求
+
+    def bridge_post_allowed(self, path: str) -> bool:
+        return any(p == path if isinstance(p, str) else p.fullmatch(path) for p in self.bridge_posts)
 
     def env(self, name: str, default: str | None = None) -> str | None:
         return os.environ.get(f"{self.env_prefix}_{name}", default)

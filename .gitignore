@@ -1,8 +1,12 @@
-# 运行产物（含登录资料和店铺数据，不要分享）
+# 运行产物（含登录资料、店铺数据和买家信息，不要分享）
 .runtime/
 .uv-python/
 .uv-cache/
 .python-packages/
+data/
+reports/
+portraits/
+out-*.json
 __pycache__/
 *.pyc
 .DS_Store

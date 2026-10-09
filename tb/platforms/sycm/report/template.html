@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>__TITLE__</title>
+<style>
+:root{
+  --pri:#2F5597;--pri-d:#1F3864;--pri-l:#DDEBF7;--acc:#C00000;--ok:#548235;--warn:#ED7D31;
+  --bg:#F4F6FA;--card:#FFFFFF;--bd:#E3E8F0;--tx:#1F2937;--tx2:#5B6472;--tx3:#8A93A2;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{background:var(--bg);color:var(--tx);font:14px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI","Microsoft YaHei","PingFang SC","Hiragino Sans GB",sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--pri)}
+.wrap{max-width:1180px;margin:0 auto;padding:0 20px 64px}
+header.top{background:linear-gradient(135deg,#1F3864 0%,#2F5597 62%,#3E7BB8 100%);color:#fff;padding:34px 0 26px}
+header.top .wrap{padding-bottom:0}
+.h-kicker{font-size:12.5px;letter-spacing:.14em;opacity:.85;font-weight:600}
+h1{font-size:26px;margin:8px 0 6px;font-weight:700;letter-spacing:.2px}
+.h-sub{font-size:13.5px;opacity:.92}
+.chips{margin-top:16px;display:flex;flex-wrap:wrap;gap:8px}
+.chip{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.28);padding:5px 11px;border-radius:99px;font-size:12px}
+.chip b{font-weight:700}
+nav.tabs{position:sticky;top:0;z-index:40;background:rgba(255,255,255,.96);backdrop-filter:blur(8px);border-bottom:1px solid var(--bd);margin-bottom:22px}
+nav.tabs .inner{max-width:1180px;margin:0 auto;padding:0 20px;display:flex;gap:2px;overflow-x:auto}
+nav.tabs button{appearance:none;border:0;background:transparent;padding:14px 15px;font-size:13.5px;color:var(--tx2);cursor:pointer;border-bottom:2.5px solid transparent;white-space:nowrap;font-family:inherit}
+nav.tabs button:hover{color:var(--pri)}
+nav.tabs button.on{color:var(--pri);border-bottom-color:var(--pri);font-weight:700}
+.panel{display:none;animation:fade .22s ease}
+.panel.on{display:block}
+@keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+h2{font-size:19px;margin:26px 0 12px;padding-left:11px;border-left:4px solid var(--pri);font-weight:700;color:var(--pri-d)}
+h3{font-size:15.5px;margin:20px 0 10px;color:var(--pri-d);font-weight:700}
+.card{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:18px 20px;margin:14px 0;box-shadow:0 1px 2px rgba(16,32,64,.04)}
+.grid{display:grid;gap:14px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.g3{grid-template-columns:repeat(auto-fit,minmax(230px,1fr))}
+.g4{grid-template-columns:repeat(auto-fit,minmax(178px,1fr))}
+.kpi{background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:14px 16px}
+.kpi .k{font-size:12px;color:var(--tx3);margin-bottom:5px;letter-spacing:.02em}
+.kpi .v{font-size:22px;font-weight:700;color:var(--pri-d);font-variant-numeric:tabular-nums}
+.kpi .v small{font-size:12.5px;font-weight:500;color:var(--tx3);margin-left:3px}
+.kpi .d{font-size:12px;margin-top:4px;color:var(--tx2)}
+.up{color:var(--ok);font-weight:600}.down{color:var(--acc);font-weight:600}.flat{color:var(--tx3)}
+.kpi .v.up{color:var(--ok)}.kpi .v.down{color:var(--acc)}
+table{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+th{background:var(--pri);color:#fff;font-weight:600;padding:9px 10px;text-align:center;font-size:12.5px;white-space:nowrap}
+td{padding:8px 10px;border-bottom:1px solid var(--bd);text-align:center}
+td.l,th.l{text-align:left}
+tbody tr:hover{background:#F8FAFD}
+tr.hi td{background:#FFF3E4;font-weight:600}
+tr.tot td{background:var(--pri-l);font-weight:700}
+.tw{overflow-x:auto;border:1px solid var(--bd);border-radius:10px;background:#fff}
+.tw table{min-width:100%}
+.tw table.wide{min-width:900px}
+.badge{display:inline-block;padding:2px 8px;border-radius:99px;font-size:11.5px;font-weight:600}
+.b-ok{background:#E7F0DF;color:#3F6B1F}.b-bad{background:#FBE3E1;color:#A11212}.b-mid{background:#FDEEDC;color:#A85A12}
+.b-pri{background:var(--pri-l);color:var(--pri-d)}.b-grey{background:#EEF1F6;color:#5B6472}
+.chartbox{background:#fff;border:1px solid var(--bd);border-radius:10px;padding:14px 16px 6px;position:relative}
+.chart{display:block;width:100%}
+.chart text.axis{font-size:10.5px;fill:var(--tx3);font-family:inherit}
+.chart text.xl{font-size:10px;fill:var(--tx3);font-family:inherit}
+.legend{display:flex;flex-wrap:wrap;gap:14px;margin:2px 0 8px;font-size:12.5px;color:var(--tx2)}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.tip{position:absolute;pointer-events:none;background:rgba(23,32,49,.95);color:#fff;font-size:12px;padding:8px 10px;border-radius:7px;opacity:0;transition:opacity .12s;white-space:nowrap;z-index:20;line-height:1.6}
+.tip b{color:#9EC6F0}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0 14px}
+.btn{appearance:none;border:1px solid var(--bd);background:#fff;color:var(--tx);padding:7px 13px;border-radius:7px;font-size:12.5px;cursor:pointer;font-family:inherit}
+.btn:hover{border-color:var(--pri);color:var(--pri)}
+.btn.on{background:var(--pri);border-color:var(--pri);color:#fff;font-weight:600}
+.btn.ghost{background:transparent}
+.note{font-size:12.5px;color:var(--tx2);background:#F8FAFD;border-left:3px solid var(--pri);padding:9px 13px;border-radius:0 7px 7px 0;margin:10px 0}
+.note.warn{background:#FFF7EC;border-left-color:var(--warn)}
+.note.bad{background:#FDF0EF;border-left-color:var(--acc)}
+.note.ok{background:#F2F8EC;border-left-color:var(--ok)}
+ul.tight{margin:8px 0;padding-left:20px}
+ul.tight li{margin:5px 0}
+.phase{border:1px solid var(--bd);border-radius:10px;background:#fff;overflow:hidden}
+.phase .ph-hd{padding:12px 16px;color:#fff;font-weight:700;font-size:14px}
+.p1 .ph-hd{background:#C00000}.p2 .ph-hd{background:#ED7D31}.p3 .ph-hd{background:#2F5597}
+.phase .ph-bd{padding:14px 16px}
+.phase .ph-bd .row{display:flex;gap:10px;font-size:13px;padding:3px 0}
+.phase .ph-bd .row span:first-child{color:var(--tx3);min-width:52px}
+.bar{height:9px;border-radius:99px;background:#E9EEF5;overflow:hidden;min-width:60px}
+.bar>i{display:block;height:100%;border-radius:99px;background:var(--pri)}
+.sim{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}
+.sim .ctl label{display:flex;justify-content:space-between;font-size:13px;font-weight:600;color:var(--tx2);margin-bottom:6px}
+.sim .ctl label b{color:var(--pri-d);font-size:14px}
+input[type=range]{width:100%;accent-color:#2F5597;height:22px}
+.simout{background:linear-gradient(135deg,#1F3864,#2F5597);color:#fff;border-radius:10px;padding:16px 18px}
+.simout .big{font-size:30px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2}
+.simout .lbl{font-size:12px;opacity:.85}
+.simout .sub{font-size:13px;margin-top:10px;opacity:.95}
+.foot{color:var(--tx3);font-size:12px;text-align:center;margin-top:34px;padding-top:18px;border-top:1px solid var(--bd)}
+code{background:#EEF1F6;border-radius:4px;padding:1px 5px;font-size:12px}
+@media print{nav.tabs{display:none}.panel{display:block!important}header.top{background:#1F3864;-webkit-print-color-adjust:exact;print-color-adjust:exact}body{background:#fff}}
+@media(max-width:640px){h1{font-size:21px}.kpi .v{font-size:19px}}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <div class="h-kicker">单品诊断 · 增长方案</div>
+    <h1 id="h1"></h1>
+    <div class="h-sub" id="sub"></div>
+    <div id="masknote"></div>
+    <div class="chips" id="chips"></div>
+  </div>
+</header>
+
+<nav class="tabs"><div class="inner" id="tabs"></div></nav>
+
+<div class="wrap">
+<div class="panel on" id="p-overview"></div>
+<div class="panel" id="p-trend"></div>
+<div class="panel" id="p-bench"></div>
+<div class="panel" id="p-cause"></div>
+<div class="panel" id="p-plan"></div>
+<div class="panel" id="p-sim"></div>
+<div class="panel" id="p-gap"></div>
+
+<div class="foot" id="foot"></div>
+</div>
+
+<script>const DATA = /*__DATA__*/null;</script>
+<script>
+const NS='http://www.w3.org/2000/svg';
+const $=s=>document.querySelector(s);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const md=s=>esc(s).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');            // 分析里的 **加粗**
+const num=n=>typeof n==='number'&&isFinite(n);
+const fmt=n=>!num(n)?'-':Math.round(n).toLocaleString('en-US');
+const fmt1=n=>!num(n)?'-':Number(n).toLocaleString('en-US',{minimumFractionDigits:1,maximumFractionDigits:1});
+const pr=n=>!num(n)?'-':(n*100).toFixed(2)+'%';                      // 比率（小数）→ 百分数
+const pr1=n=>!num(n)?'-':(n*100).toFixed(1)+'%';
+const pv=n=>!num(n)?'-':(n*100).toFixed(2);
+const CN='一二三四五六七八九十',CIRCLE='①②③④⑤⑥⑦⑧⑨';
+function el(t,a){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);return e;}
+function pctDelta(a,b){if(!num(a)||!num(b)||!a)return null;return (b-a)/a*100;}
+function dcls(v,inv){if(v==null)return 'flat';if(Math.abs(v)<0.05)return 'flat';const up=v>0;return (inv?!up:up)?'up':'down';}
+function arrow(v){if(v==null||Math.abs(v)<0.005)return '';return v>0?'▲':'▼';}
+const axisPct=(v,max)=>v.toFixed(max<2?2:(max<20?1:0))+'%';                    // 一根轴上的小数位一致
+const small=n=>num(n)&&Math.abs(n)<10?fmt1(n):fmt(n);                          // 每天不到 10 个的留一位小数
+
+const M=DATA.meta,A=DATA.analysis,PL=DATA.plan,MASK=DATA.masked;
+const X=label=>MASK?(label.includes('/日')?label.replace('/日','指数/日'):label+'指数'):label;   // 脱敏版的绝对数都是指数
+const money=n=>!num(n)?'-':(MASK?fmt(n):Number(n).toLocaleString('en-US',{maximumFractionDigits:2}));
+const unit=MASK?'<small>指数</small>':'<small>元</small>';
+const I=DATA.daily,S=DATA.shop_daily,P=DATA.total;
+const N=M.days,ND=I.length;
+const first=I[0],last=I[I.length-1];
+const sum=(a,k)=>a.reduce((s,x)=>s+(x[k]||0),0);
+const declining=sum(I.slice(N),'amt')<sum(I.slice(0,N),'amt');
+const per=M.periods,later=per['分析周期'],earlier=per['对比周期'];
+const mmdd=d=>d?d.slice(5):'';
+const cnt=n=>n===2?'两':(n<=10?CN[n-1]:String(n));                 // 两条硬伤、三阶段路线图
+
+/* ============ 图表引擎 ============ */
+function makeChart(host,cfg){
+  Array.prototype.slice.call(host.querySelectorAll('svg.chart')).forEach(function(n){n.remove();});
+  if(!host.querySelector('.legend')){var _lg=document.createElement('div');_lg.className='legend';host.insertBefore(_lg,host.firstChild);}
+  const W=Math.max(320,host.clientWidth||860),H=cfg.height||330;
+  const hasR=cfg.series.some(s=>s.axis==='r');
+  const P={t:26,r:hasR?72:34,b:44,l:74};
+  const pw=W-P.l-P.r,ph=H-P.t-P.b,N=cfg.labels.length,band=pw/N;
+  const mx=a=>Math.max(1,...a.map(v=>Math.abs(v||0)));
+  const lS=cfg.series.filter(s=>s.axis!=='r'),rS=cfg.series.filter(s=>s.axis==='r');
+  const lmax=mx(lS.flatMap(s=>s.data))*1.15;
+  const rmax=rS.length?Math.max(...rS.flatMap(s=>s.data).map(v=>Math.abs(v||0)),1e-9)*1.3:1;
+  const svg=el('svg',{class:'chart',viewBox:'0 0 '+W+' '+H,width:'100%',height:H});
+  const T=5;
+  for(let i=0;i<=T;i++){
+    const y=P.t+ph*i/T;
+    svg.appendChild(el('line',{x1:P.l,x2:P.l+pw,y1:y,y2:y,stroke:'#EDF1F7','stroke-width':1}));
+    const tl=el('text',{x:P.l-9,y:y+4,'text-anchor':'end',class:'axis'});
+    tl.textContent=cfg.fmtL?cfg.fmtL(lmax*(1-i/T)):fmt(lmax*(1-i/T));svg.appendChild(tl);
+    if(rS.length){const tr=el('text',{x:P.l+pw+9,y:y+4,'text-anchor':'start',class:'axis'});
+      tr.textContent=cfg.fmtR?cfg.fmtR(rmax*(1-i/T),rmax):fmt(rmax*(1-i/T));svg.appendChild(tr);}
+  }
+  const xc=i=>P.l+band*i+band/2;
+  const yL=v=>P.t+ph-Math.min(1,Math.abs(v||0)/lmax)*ph;
+  const yR=v=>P.t+ph-Math.min(1,Math.abs(v||0)/rmax)*ph;
+  /* bars */
+  const bars=lS.filter(s=>s.type==='bar');
+  bars.forEach((s,j)=>{
+    const bw=band*(cfg.barW||0.46),off=bars.length>1?(j-(bars.length-1)/2)*bw:0;
+    s.data.forEach((v,i)=>{
+      const y=yL(v);
+      svg.appendChild(el('rect',{x:xc(i)-bw/2+off,y:y,width:bw,height:Math.max(0,P.t+ph-y),rx:3,fill:s.color,opacity:.92}));
+    });
+  });
+  /* lines */
+  cfg.series.filter(s=>s.type!=='bar').forEach(s=>{
+    const right=s.axis==='r';
+    const yf=right?yR:yL;
+    let d='';
+    s.data.forEach((v,i)=>{d+=(i?' L':'M')+xc(i)+' '+yf(v);});
+    svg.appendChild(el('path',{d:d,fill:'none',stroke:s.color,'stroke-width':s.w||2.2,'stroke-linejoin':'round','stroke-dasharray':s.dash||''}));
+    s.data.forEach((v,i)=>{svg.appendChild(el('circle',{cx:xc(i),cy:yf(v),r:3.4,fill:'#fff',stroke:s.color,'stroke-width':2}));});
+  });
+  /* x labels */
+  const every=Math.ceil(N/16);
+  cfg.labels.forEach((lb,i)=>{if(i%every)return;const t=el('text',{x:xc(i),y:P.t+ph+17,'text-anchor':'middle',class:'xl'});t.textContent=lb;svg.appendChild(t);});
+  /* hover */
+  const hoverLine=el('line',{x1:0,x2:0,y1:P.t,y2:P.t+ph,stroke:'#B9C6DA','stroke-width':1,'stroke-dasharray':'4 3',opacity:0});
+  svg.appendChild(hoverLine);
+  const ov=el('rect',{x:P.l,y:P.t,width:pw,height:ph,fill:'transparent'});
+  svg.appendChild(ov);
+  host.querySelectorAll('.tip').forEach(t=>t.remove());
+  const tip=document.createElement('div');tip.className='tip';host.appendChild(tip);
+  const hide=()=>{tip.style.opacity=0;hoverLine.setAttribute('opacity',0);};
+  ov.addEventListener('mousemove',ev=>{
+    const rc=svg.getBoundingClientRect();
+    const sx=(ev.clientX-rc.left)*(W/rc.width);
+    let i=Math.floor((sx-P.l)/band);i=Math.max(0,Math.min(N-1,i));
+    hoverLine.setAttribute('x1',xc(i));hoverLine.setAttribute('x2',xc(i));hoverLine.setAttribute('opacity',1);
+    let h='<div style="font-weight:700;margin-bottom:3px">'+cfg.labels[i]+'</div>';
+    cfg.series.forEach(s=>{h+='<div><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:'+s.color+';margin-right:6px"></i>'+s.name+' <b>'+((cfg.fmtTip&&cfg.fmtTip[s.name])?cfg.fmtTip[s.name](s.data[i]):fmt(s.data[i]))+'</b></div>';});
+    tip.innerHTML=h;tip.style.opacity=1;
+    const hx=ev.clientX-rc.left;
+    let left=hx+14;if(left+tip.offsetWidth>rc.width-6)left=hx-tip.offsetWidth-14;
+    tip.style.left=Math.max(4,left)+'px';tip.style.top=(ev.clientY-rc.top-tip.offsetHeight-10)+'px';
+    if(parseFloat(tip.style.top)<0)tip.style.top=(ev.clientY-rc.top+16)+'px';
+  });
+  ov.addEventListener('mouseleave',hide);
+  host.appendChild(svg);
+  host._redraw=()=>makeChart(host,cfg);
+}
+
+/* ============ 页头 ============ */
+$('#h1').textContent=(A.title||'单品诊断与 '+PL.days+' 天「量·率·速」增长方案')+(MASK?'（强脱敏版）':'');
+$('#sub').textContent=MASK?M.title:M.title+'（'+M.item_id+'）';
+if(MASK)$('#masknote').innerHTML='<div class="note ok"><b>脱敏说明：</b>已隐藏店铺名、商品 ID、商品标题，并将金额、访客、买家、件数等绝对经营数据改为指数（本品后 '+N+' 天日均 = 100）；仅保留必要比例、趋势和动作判断。</div>';
+$('#chips').innerHTML=[['数据区间',first.d+' ~ '+mmdd(last.d),'（'+ND+'天）'],['数据源','生意参谋'],M.cateName?['类目',M.cateName]:null,['报告',(M.generated||'').slice(0,10)]]
+  .filter(Boolean).map(c=>'<div class="chip">'+c[0]+' <b>'+esc(c[1])+'</b>'+(c[2]||'')+'</div>').join('');
+$('#foot').innerHTML='本报告为单文件离线交互式报告，数据内嵌，可直接分享。'+(MASK?'<br>本文件为强脱敏版：原始商品、店铺身份与绝对经营规模不展示；金额/访客/买家/件数均以指数呈现。':'');
+
+const TABS=[['overview','诊断总览'],['trend','趋势图表'],['bench','同店对标'],['cause',declining?'下滑归因':'问题归因'],['plan',PL.days+'天方案'],['sim','目标模拟器'],['gap','数据缺口']];
+$('#tabs').innerHTML=TABS.map((t,i)=>'<button data-t="'+t[0]+'"'+(i?'':' class="on"')+'>'+t[1]+'</button>').join('');
+$('#tabs').addEventListener('click',e=>{
+  const b=e.target.closest('button');if(!b)return;
+  document.querySelectorAll('nav.tabs button').forEach(x=>x.classList.remove('on'));b.classList.add('on');
+  document.querySelectorAll('.panel').forEach(x=>x.classList.remove('on'));
+  $('#p-'+b.dataset.t).classList.add('on');
+  setTimeout(()=>document.querySelectorAll('.chartbox').forEach(h=>h._redraw&&h._redraw()),40);
+  window.scrollTo({top:0,behavior:'smooth'});
+});
+
+/* ---------- 1 总览 ---------- */
+(function(){
+  const kpi=(k,v,d,cls)=>'<div class="kpi"><div class="k">'+k+'</div><div class="v">'+v+'</div><div class="d '+(cls||'')+'">'+(d||'&nbsp;')+'</div></div>';
+  const W=A.wounds||[];
+  const rows=[['商品访客（UV）',fmt(first.uv),fmt(last.uv),pctDelta(first.uv,last.uv),'pct',1],
+     [X('支付金额'),money(first.amt),money(last.amt),pctDelta(first.amt,last.amt),'pct',1],
+     [X('支付买家数'),fmt(first.byr),fmt(last.byr),pctDelta(first.byr,last.byr),'pct',1],
+     ['支付转化率',pr(first.cv),pr(last.cv),num(first.cv)&&num(last.cv)?(last.cv-first.cv)*100:null,'pp',0],
+     ['加购率',pr(first.cartRate),pr(last.cartRate),num(first.cartRate)&&num(last.cartRate)?(last.cartRate-first.cartRate)*100:null,'pp',0],
+     [X('客单价'),fmt1(first.aov),fmt1(last.aov),pctDelta(first.aov,last.aov),'pct',1],
+     [X('搜索引导访客'),fmt(first.seUv),fmt(last.seUv),pctDelta(first.seUv,last.seUv),'pct',1],
+     ['搜索访客占比',pr1(first.seShare),pr1(last.seShare),num(first.seShare)&&num(last.seShare)?(last.seShare-first.seShare)*100:null,'pp',0],
+     ['跳失率',pr1(first.bounce),pr1(last.bounce),num(first.bounce)&&num(last.bounce)?(last.bounce-first.bounce)*100:null,'pp',0],
+     ['平均停留（秒）',fmt1(first.stay),fmt1(last.stay),pctDelta(first.stay,last.stay),'pct',0],
+     [X('新客支付买家'),fmt(first.newb),fmt(last.newb),pctDelta(first.newb,last.newb),'pct',1],
+     [X('老客支付买家'),fmt(first.oldb),fmt(last.oldb),pctDelta(first.oldb,last.oldb),'pct',1]];
+  if(MASK)rows[0][0]='商品访客指数（UV）';
+  $('#p-overview').innerHTML=`
+<h2>一、结论摘要</h2>
+<div class="grid g3">
+  ${kpi('日均支付金额（'+ND+'天）',money(P.amt/ND)+' '+unit,X('区间合计')+' '+money(P.amt))}
+  ${kpi(ND+'天'+X('支付金额'),money(P.amt)+' '+unit,X('支付买家')+' '+fmt(P.byr)+'｜'+X('客单价')+' '+fmt1(P.aov))}
+  ${kpi('支付转化率',pv(P.cv)+' <small>%</small>','搜索引导转化率 '+pr(P.seCv))}
+  ${kpi('加购率',pv(P.cartRate)+' <small>%</small>',X('加购人数')+' '+fmt(P.cartByr))}
+  ${kpi(X('商品访客'),fmt(P.uv),X('搜索引导访客')+' '+fmt(P.seUv)+'（'+pr1(P.seShare)+'）')}
+  ${kpi('退款率',pv(P.rfdRate)+' <small>%</small>','跳失率 '+pr1(P.bounce)+'｜停留 '+fmt1(P.stay)+'s')}
+</div>
+<div class="note bad"><b>定性：${md(A.verdict)}</b>${A.verdict_detail?' '+md(A.verdict_detail):''}</div>
+${W.length?`<h3>${cnt(W.length)}条硬伤</h3>
+<div class="grid g2">${W.map((w,i)=>'<div class="card"><b>'+(CIRCLE[i]||(i+1)+'.')+' '+md(w.title)+'</b><ul class="tight">'+(w.points||[]).map(p=>'<li>'+md(p)+'</li>').join('')+'</ul></div>').join('')}</div>`:''}
+${A.bench_note?'<h3>同店对标一句话</h3><div class="note ok">'+md(A.bench_note)+'</div>':''}
+<h3>首末对比（${mmdd(first.d)} → ${mmdd(last.d)}）</h3>
+<div class="tw"><table id="t-firstlast"><thead><tr><th class="l">指标</th><th>${mmdd(first.d)}</th><th>${mmdd(last.d)}</th><th>变化</th></tr></thead><tbody>
+${rows.map(r=>{const inv=r[0].includes('跳失');return '<tr'+(r[0].includes('转化率')||r[0].includes('加购率')?' class="hi"':'')+'><td class="l">'+r[0]+'</td><td>'+r[1]+'</td><td>'+r[2]+'</td><td class="'+dcls(r[3],inv)+'">'+(r[3]==null?'-':arrow(r[3])+Math.abs(r[3]).toFixed(r[4]==='pp'?2:1)+(r[4]==='pp'?'pp':'%'))+'</td></tr>';}).join('')}
+</tbody></table></div>
+<div class="toolbar"><button class="btn" onclick="exportTable('t-firstlast','首末对比')">导出 CSV</button></div>
+${A.firstlast_note?'<div class="note">'+md(A.firstlast_note)+'</div>':''}
+`;
+})();
+
+/* ---------- 2 趋势 ---------- */
+(function(){
+  const T=A.trend_notes||{};
+  const labels=I.map(x=>mmdd(x.d));
+  const note=k=>T[k]?'<div class="note">'+md(T[k])+'</div>':'';
+  $('#p-trend').innerHTML=`
+<h2>二、趋势图表</h2>
+<div class="toolbar">
+  <span style="font-size:12.5px;color:var(--tx3);margin-right:2px">区间：</span>
+  <button class="btn on" data-r="all">全部 ${ND} 天</button>
+  <button class="btn" data-r="w1">前 ${N} 天</button>
+  <button class="btn" data-r="w2">后 ${N} 天</button>
+  <span style="flex:1"></span>
+  <button class="btn" onclick="exportTable('t-itemdaily','单品日报')">导出每日数据 CSV</button>
+  <button class="btn" onclick="window.print()">打印 / 存 PDF</button>
+</div>
+<div class="chartbox" id="c1"><div class="legend" id="l1"></div></div>
+${note('sales')}
+<div class="chartbox" id="c2"><div class="legend" id="l2"></div></div>
+${note('traffic')}
+<div class="chartbox" id="c3" style="margin-top:14px"><div class="legend" id="l3"></div></div>
+${note('shop')}
+<h3>每日明细</h3>
+<div class="tw"><table id="t-itemdaily" class="wide"><thead><tr>
+<th>日期</th><th>${X('访客UV')}</th><th>${X('浏览量PV')}</th><th>${X('支付金额')}</th><th>${X('支付件数')}</th><th>${X('支付买家')}</th><th>转化率</th><th>${X('客单价')}</th><th>${X('加购件数')}</th><th>加购率</th><th>${X('搜索引导访客')}</th><th>搜索占比</th><th>跳失率</th><th>停留(s)</th><th>${X('新客')}</th><th>${X('老客')}</th></tr></thead><tbody>
+${I.map(x=>'<tr><td>'+x.d+'</td><td>'+fmt(x.uv)+'</td><td>'+fmt(x.pv)+'</td><td>'+money(x.amt)+'</td><td>'+fmt(x.itm)+'</td><td>'+fmt(x.byr)+'</td><td>'+pr(x.cv)+'</td><td>'+fmt1(x.aov)+'</td><td>'+fmt(x.cart)+'</td><td>'+pr(x.cartRate)+'</td><td>'+fmt(x.seUv)+'</td><td>'+pr1(x.seShare)+'</td><td>'+pr1(x.bounce)+'</td><td>'+fmt1(x.stay)+'</td><td>'+fmt(x.newb)+'</td><td>'+fmt(x.oldb)+'</td></tr>').join('')}
+</tbody></table></div>
+`;
+  // 本宝贝和店铺大盘量级差得多：各自按整段日均 = 100 折成指数再比走势
+  const idx=(a,k)=>{const m=sum(a,k)/(a.length||1);return a.map(x=>m?Math.round((x[k]||0)/m*1000)/10:0);};
+  const shopAmt=(()=>{const by={};S.forEach(x=>by[x.d]=x);return idx(I.map(x=>by[x.d]||{}),'amt');})();
+  const l1=[{name:X('支付金额'),data:I.map(x=>x.amt),color:'#9DC3E6',type:'bar'},
+            {name:'支付转化率(%)',data:I.map(x=>num(x.cv)?x.cv*100:null),color:'#C00000',type:'line',axis:'r'}];
+  const l2=[{name:X('商品访客UV'),data:I.map(x=>x.uv),color:'#2F5597',type:'line'},
+            {name:X('搜索引导访客'),data:I.map(x=>x.seUv),color:'#ED7D31',type:'line'},
+            {name:'加购率(%)',data:I.map(x=>num(x.cartRate)?x.cartRate*100:null),color:'#548235',type:'line',axis:'r',dash:'6 4'}];
+  const l3=[{name:'本宝贝支付金额（日均=100）',data:idx(I,'amt'),color:'#2F5597',type:'bar'},
+            {name:'店铺大盘支付金额（日均=100）',data:shopAmt,color:'#B7CBE5',type:'bar'}];
+  const tipPct={'支付转化率(%)':v=>num(v)?v.toFixed(2)+'%':'-','加购率(%)':v=>num(v)?v.toFixed(2)+'%':'-'};
+  const tipMoney={[X('支付金额')]:v=>money(v)};
+  $('#l1').innerHTML=l1.map(s=>'<span><i style="background:'+s.color+'"></i>'+s.name+'</span>').join('');
+  $('#l2').innerHTML=l2.map(s=>'<span><i style="background:'+s.color+'"></i>'+s.name+'</span>').join('');
+  $('#l3').innerHTML=l3.map(s=>'<span><i style="background:'+s.color+'"></i>'+s.name+'</span>').join('');
+  const h1=$('#c1'),h2=$('#c2'),h3=$('#c3');
+  const draw=()=>{
+    let idx=null;
+    if(window._range==='w1')idx=[0,N-1];else if(window._range==='w2')idx=[N,ND-1];
+    const cut=a=>idx?a.slice(idx[0],idx[1]+1):a;
+    makeChart(h1,{labels:cut(labels),series:l1.map(s=>({...s,data:cut(s.data)})),height:320,fmtL:v=>fmt(v),fmtR:axisPct,fmtTip:{...tipPct,...tipMoney}});
+    makeChart(h2,{labels:cut(labels),series:l2.map(s=>({...s,data:cut(s.data)})),height:320,fmtL:v=>fmt(v),fmtR:axisPct,fmtTip:tipPct});
+    makeChart(h3,{labels:cut(labels),series:l3.map(s=>({...s,data:cut(s.data)})),height:320,fmtL:v=>fmt(v),barW:0.34});
+  };
+  document.querySelectorAll('#p-trend .toolbar button[data-r]').forEach(b=>{
+    b.addEventListener('click',()=>{
+      document.querySelectorAll('#p-trend .toolbar button[data-r]').forEach(x=>x.classList.remove('on'));
+      b.classList.add('on');window._range=b.dataset.r;draw();
+    });
+  });
+  draw();
+})();
+
+/* ---------- 3 同店对标 ---------- */
+(function(){
+  const all=DATA.bench.slice().sort((a,b)=>(b.amt||0)-(a.amt||0));
+  const B=all.filter(b=>b.same);
+  const bm=all.find(b=>b.me),best=all.find(b=>b.id===DATA.best);
+  const maxCv=Math.max(...B.map(b=>b.cv||0),1e-9);
+  const rows=B.map(b=>{
+    const hi=b.me,c=hi?'#C00000':'#2F5597';
+    return '<tr class="'+(hi?'hi':'')+'"><td>'+esc(b.id)+(hi?' <span class="badge b-bad">本宝贝</span>':'')+'</td><td class="l">'+esc((b.title||'').slice(0,30))+'</td><td>'+esc(b.cateName||'-')+'</td><td>'+money(b.amt)+'</td><td>'+fmt(b.uv)+'</td>'
+      +'<td><div style="display:flex;align-items:center;gap:7px"><b style="min-width:46px;text-align:right;color:'+c+'">'+pr(b.cv)+'</b><div class="bar" style="flex:1"><i style="width:'+((b.cv||0)/maxCv*100).toFixed(1)+'%;background:'+c+'"></i></div></div></td>'
+      +'<td>'+pr(b.cartPerUv)+'</td><td>'+fmt1(b.aov)+'</td></tr>';
+  }).join('');
+  const gap=bm&&best&&num(bm.cv)&&num(best.cv)?(best.cv-bm.cv)*100:null;
+  const room=gap!=null&&bm.cv?((best.cv/bm.cv-1)*100).toFixed(0)+'%':'-';
+  const conclusion=A.bench_conclusion||A.bench_note;
+  $('#p-bench').innerHTML=`
+<h2>三、同店同类目内部标杆对标</h2>
+<div class="note"><b>为什么用同店对标：</b>同店同类目的链接<b>口径完全一致、可追溯ID</b>，差距可以直接对照着改——结论能直接指导动作，且可直接复用。表里是后 ${N} 天（${later[0]} ~ ${later[1]}）生意参谋商品排行里和本宝贝同一个一级类目的商品；同店最佳只比访客 ≥ ${fmt(DATA.floor)} 的。</div>
+${bm?'':'<div class="note warn">本宝贝不在商品排行按支付金额的前 60 个里，没法放进同店对标。</div>'}
+<div class="grid g3">
+  <div class="kpi"><div class="k">本宝贝转化率</div><div class="v" style="color:#C00000">${bm?pv(bm.cv)+'<small>%</small>':'-'}</div><div class="d">${bm?'加购率 '+pr(bm.cartPerUv)+'｜访客 '+fmt(bm.uv):'&nbsp;'}</div></div>
+  <div class="kpi"><div class="k">同店最佳（口径可比）</div><div class="v">${best?pv(best.cv)+'<small>%</small>':'-'}</div><div class="d">${best?esc((best.title||'').slice(0,18))+'｜访客 '+fmt(best.uv):'没有访客够多的同类目商品'}</div></div>
+  <div class="kpi"><div class="k">转化率差距</div><div class="v ${gap>0?'down':'up'}">${gap==null?'-':gap.toFixed(2)+'<small>pp</small>'}</div><div class="d">相对提升空间 ${room}</div></div>
+</div>
+<div class="tw" style="margin-top:14px"><table id="t-bench" class="wide"><thead><tr><th>宝贝ID</th><th class="l">商品标题</th><th>类目</th><th>${X('支付金额')}</th><th>${X('访客UV')}</th><th>支付转化率</th><th>加购率</th><th>${X('客单价')}</th></tr></thead><tbody>${rows}</tbody></table></div>
+<div class="toolbar"><button class="btn" onclick="exportTable('t-bench','同店对标')">导出 CSV</button></div>
+${conclusion?'<div class="note ok"><b>结论：</b>'+md(conclusion)+'</div>':''}
+<h3>店铺主力商品 TOP12（按支付金额）</h3>
+<div class="tw"><table id="t-top" class="wide"><thead><tr><th>宝贝ID</th><th class="l">商品标题</th><th>${X('支付金额')}</th><th>${X('访客UV')}</th><th>转化率</th><th>${X('客单价')}</th></tr></thead><tbody>
+${all.slice(0,12).map(x=>'<tr'+(x.me?' class="hi"':'')+'><td>'+esc(x.id)+'</td><td class="l">'+esc((x.title||'').slice(0,30))+'</td><td>'+money(x.amt)+'</td><td>'+fmt(x.uv)+'</td><td>'+pr(x.cv)+'</td><td>'+fmt1(x.aov)+'</td></tr>').join('')}
+</tbody></table></div>
+`;
+})();
+
+/* ---------- 4 归因 ---------- */
+(function(){
+  const c=A.causes||[];
+  $('#p-cause').innerHTML='<h2>四、'+(declining?'下滑':'问题')+'归因（按影响权重排序）</h2>'+
+    c.map((x,i)=>'<div class="card"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span class="badge b-pri">归因 '+(i+1)+'</span><b style="font-size:15px">'+md(x.title)+'</b>'+(x.weight?'<span class="badge '+(i<2?'b-bad':'b-mid')+'">'+esc(x.weight)+'</span>':'')+'</div><div style="margin:8px 0;color:var(--tx2);font-size:13px">证据：'+md(x.evidence)+'</div><div style="font-size:12.5px;color:var(--tx3);margin-bottom:4px">对应动作</div><ul class="tight" style="font-size:13px">'+(x.actions||[]).map(a=>'<li>'+md(a)+'</li>').join('')+'</ul></div>').join('')+
+    (A.logic_chain?'<div class="note bad"><b>核心逻辑链：</b>'+md(A.logic_chain)+'</div>':'');
+})();
+
+/* ---------- 5 方案 ---------- */
+(function(){
+  const plan=A.plan||{},ST=PL.stages,acts=plan.actions||[],risks=plan.risks||[];
+  const stageName=n=>{const s=ST[n-1];return s?(CN[n-1]||n)+'·'+s.name:'阶段'+n;};
+  const badge=n=>n===1?'b-bad':(n===2?'b-mid':'b-pri');
+  const fmtT=(t,v)=>t.单位==='rate'?pr(v):(t.单位==='amt'?money(v):(t.单位==='aov'?fmt1(v):small(v)));
+  const change=t=>{if(!num(t.基线)||!num(t.目标))return ['-',null];
+    if(t.单位==='rate'){const d=(t.目标-t.基线)*100;return [(d>=0?'+':'')+d.toFixed(2)+'pp',d];}
+    if(!t.基线)return ['-',null];const d=(t.目标/t.基线-1)*100;return [(d>=0?'+':'')+d.toFixed(1)+'%',d];};
+  const dimBadge=d=>d==='率'?'b-bad':(d==='量'?'b-pri':'b-ok');
+  const last=PL.presets[PL.presets.length-1];
+  let prevG=PL.base_gmv;
+  const cards=ST.map((s,i)=>{
+    const g=s.gmv,grow=num(g)&&num(prevG)&&prevG?((g/prevG-1)*100):null;prevG=g;
+    const rate=['转化率 →'+pr(s.cv)];if(num(s.cartRate))rate.push('加购率 →'+pr(s.cartRate));if(num(s.bounce))rate.push('跳失率 ≤'+pr1(s.bounce));
+    const vol=[X('访客')+' '+small(PL.base_uv)+'→'+small(s.uv)];if(num(s.se))vol.push(X('搜索引导访客')+'/日 →'+small(s.se));
+    const rows=[['主题',md(s.theme||'-')],['量目标',vol.join('；')],['率目标',rate.join('；')],['速目标',X('日均支付金额')+' ≥'+money(g)+(grow==null?'':'（'+(grow>=0?'+':'')+grow.toFixed(1)+'%）')]];
+    return '<div class="phase p'+((i%3)+1)+'"><div class="ph-hd">'+(CN[i]||i+1)+' · '+esc(s.name)+'</div><div class="ph-bd">'+rows.map(r=>'<div class="row"><span>'+r[0]+'</span><b>'+r[1]+'</b></div>').join('')+'</div></div>';
+  }).join('');
+  $('#p-plan').innerHTML=`
+<h2>五、${PL.days} 天「量·率·速」增长方案</h2>
+<div class="note">起点 D1 = <b>${PL.start}</b>，终点 D${PL.days} = <b>${PL.end}</b>。基线取后 ${N} 天（${mmdd(later[0])}~${mmdd(later[1])}）日均。${plan.baseline_note?md(plan.baseline_note):''}</div>
+<h3>5.1 目标设定</h3>
+<div class="tw"><table id="t-target"><thead><tr><th>维度</th><th>指标</th><th>基线（后${N}天日均）</th><th>D${PL.days} 目标</th><th>变化</th></tr></thead><tbody>
+${PL.targets.map(t=>{const ch=change(t);const lbl=t.单位==='rate'?t.指标:X(t.指标);return '<tr><td><span class="badge '+dimBadge(t.维度)+'">'+t.维度+'</span></td><td class="l">'+lbl+'</td><td>'+fmtT(t,t.基线)+'</td><td><b>'+fmtT(t,t.目标)+'</b></td><td class="'+dcls(ch[1],t.指标.includes('跳失'))+'">'+ch[0]+'</td></tr>';}).join('')}
+</tbody></table></div>
+<div class="note ok">目标校验：目标${X('访客')} ${small(PL.base_uv*last.uv)} × ${pr(last.cv)} × ${X('客单价')} ${fmt1(PL.base_aov*last.aov)} ≈ <b>目标${X('日均支付金额')} ${money(PL.final_gmv)}</b>，与阶段目标自洽。</div>
+<h3>5.2 ${cnt(ST.length)}阶段路线图</h3>
+<div class="grid g3">${cards}</div>
+<h3>5.3 门槛爬坡曲线（可核对每日是否在轨）</h3>
+<div class="chartbox" id="c4"><div class="legend" id="l4"></div></div>
+<div class="note">门槛不是死数，而是从基线线性爬坡到阶段目标；每日对照可及时发现在轨偏离，避免阶段末才发现掉队。</div>
+<h3>5.4 动作清单（${acts.length} 条 · 可派工）</h3>
+<div class="tw"><table id="t-act" class="wide"><thead><tr><th>#</th><th>阶段</th><th class="l">动作</th><th>负责人</th><th>观察指标</th><th>完成时点</th></tr></thead><tbody>
+${acts.map((a,i)=>'<tr><td>'+(i+1)+'</td><td><span class="badge '+badge(a.phase)+'">'+esc(stageName(a.phase))+'</span></td><td class="l">'+md(a.what)+'</td><td>'+esc(a.owner||'')+'</td><td>'+esc(a.watch||'')+'</td><td>'+esc(a.when||'')+'</td></tr>').join('')}
+</tbody></table></div>
+<div class="toolbar"><button class="btn" onclick="exportTable('t-act','动作清单')">导出动作清单 CSV</button></div>
+${risks.length?`<h3>5.5 风险与对策</h3>
+<div class="tw"><table><thead><tr><th class="l">风险</th><th class="l">对策</th></tr></thead><tbody>
+${risks.map(r=>'<tr><td class="l">'+md(r.risk)+'</td><td class="l">'+md(r.counter)+'</td></tr>').join('')}
+</tbody></table></div>`:''}
+`;
+  const R=PL.ramp;
+  makeChart($('#c4'),{labels:R.map(r=>'D'+r.d),series:[
+    {name:'当日'+X('支付金额')+'门槛',data:R.map(r=>r.gmv),color:'#2F5597',type:'line'},
+    {name:'当日转化率门槛(%)',data:R.map(r=>r.cv*100),color:'#C00000',type:'line',axis:'r',dash:'6 4'}],
+    height:300,fmtL:v=>fmt(v),fmtR:axisPct,fmtTip:{['当日'+X('支付金额')+'门槛']:v=>money(v),'当日转化率门槛(%)':v=>v.toFixed(2)+'%'}});
+  $('#l4').innerHTML='<span><i style="background:#2F5597"></i>当日'+X('支付金额')+'门槛</span><span><i style="background:#C00000"></i>当日转化率门槛(%)</span>';
+})();
+
+/* ---------- 6 模拟器 ---------- */
+(function(){
+  const U0=PL.base_uv,CV0=PL.base_cv,AOV0=PL.base_aov,G0=PL.base_gmv,TGT=PL.final_gmv;
+  const all=DATA.bench,best=all.find(b=>b.id===DATA.best);
+  const PR=PL.presets,preset=p=>({uv:U0*p.uv,cv:p.cv*100,aov:AOV0*p.aov});
+  const cvs=PR.map(p=>p.cv*100).concat(best&&num(best.cv)?[best.cv*100]:[]);
+  const cvLo=Math.max(0,Math.min(...cvs)*0.6),cvHi=Math.max(...cvs)*1.3||1;
+  const gmvOf=(uv,cv,aov)=>CV0&&U0&&AOV0?G0*(uv/U0)*(cv/100/CV0)*(aov/AOV0):uv*cv/100*aov;
+  const back=PR.find(p=>p.name.startsWith('回到'));
+  const card=(k,p,color)=>{const s=preset(p);return '<div class="kpi"><div class="k">'+k+'</div><div class="v" style="font-size:18px'+(color?';color:'+color:'')+'">'+money(gmvOf(s.uv,s.cv,s.aov))+'<small>'+(MASK?'指数':'元')+'/日</small></div><div class="d">'+small(s.uv)+' × '+s.cv.toFixed(2)+'% × '+fmt1(s.aov)+'</div></div>';};
+  $('#p-sim').innerHTML=`
+<h2>六、目标模拟器（拖动即可测算）</h2>
+<div class="note">拖动下面三个杠杆，实时测算「日均支付金额」以及它与基线、${PL.days}天目标的关系。<b>注意：率不动、只加量或只加预算，会同时拉低 ROI。</b></div>
+<div class="sim">
+  <div class="card">
+    <div class="ctl"><label>量 · ${X('日访客')} <b id="v-uv"></b></label><input type="range" id="s-uv" min="${(U0*0.7).toFixed(2)}" max="${(U0*1.8).toFixed(2)}" step="any"></div>
+    <div class="ctl" style="margin-top:14px"><label>率 · 支付转化率 <b id="v-cv"></b></label><input type="range" id="s-cv" min="${cvLo.toFixed(2)}" max="${cvHi.toFixed(2)}" step="any"></div>
+    <div class="ctl" style="margin-top:14px"><label>速 · ${X('客单价')} <b id="v-aov"></b></label><input type="range" id="s-aov" min="${(AOV0*0.8).toFixed(2)}" max="${(AOV0*1.3).toFixed(2)}" step="any"></div>
+    <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap">${PR.map((p,i)=>'<button class="btn" data-preset="'+i+'">'+esc(p.name)+'</button>').join('')}</div>
+  </div>
+  <div class="simout">
+    <div class="lbl">测算${X('日均支付金额')}</div>
+    <div class="big" id="o-gmv"></div>
+    <div class="sub" id="o-m"></div>
+    <div class="sub" id="o-d"></div>
+    <div class="sub" id="o-t" style="margin-top:12px;font-weight:700"></div>
+  </div>
+  <div class="card">
+    <div style="font-size:13px;font-weight:700;color:var(--pri-d);margin-bottom:8px">目标缺口诊断</div>
+    <div id="o-hint" style="font-size:13px;color:var(--tx2)"></div>
+    <div style="margin-top:12px;font-size:12px;color:var(--tx3)">口径：${X('日均支付金额')} = ${X('日访客')} × 支付转化率 × ${X('客单价')}。基线 = 后 ${N} 天（${mmdd(later[0])}~${mmdd(later[1])}）日均。</div>
+  </div>
+</div>
+<div class="grid g4" style="margin-top:16px">
+  ${card('基线（现状）',PR[0])}
+  ${back?card(back.name.replace('回到',''),back):''}
+  ${card('D'+PL.days+' 目标',PR[PR.length-1],'#2F5597')}
+  <div class="kpi"><div class="k">同店标杆转化率</div><div class="v" style="font-size:18px;color:#548235">${best?pv(best.cv)+'<small>%</small>':'-'}</div><div class="d">${best?esc(best.id)+'（同类目）':'没有访客够多的同类目商品'}</div></div>
+</div>`;
+  const th=PL.threshold_cv*100;
+  function upd(){
+    const uv=+$('#s-uv').value,cv=+$('#s-cv').value,aov=+$('#s-aov').value;
+    $('#v-uv').textContent=small(uv);$('#v-cv').textContent=cv.toFixed(2)+'%';$('#v-aov').textContent=fmt1(aov);
+    const gmv=gmvOf(uv,cv,aov);
+    $('#o-gmv').textContent=money(gmv)+(MASK?' 指数':' 元');
+    $('#o-m').textContent='月化 '+money(gmv*30)+(MASK?' 指数':' 元');
+    const d=G0?(gmv-G0)/G0*100:0;
+    $('#o-d').innerHTML='较基线 <b>'+(d>=0?'+':'')+d.toFixed(1)+'%</b>';
+    const td=TGT?(gmv-TGT)/TGT*100:0,ok=td>=-0.5;
+    $('#o-t').innerHTML='vs D'+PL.days+' 目标（'+money(TGT)+'）：<span style="color:'+(ok?'#A8E6A3':'#FFC7C2')+'">'+(td>=0?'+':'')+td.toFixed(1)+'%</span>'+(ok?' ✅ 达标（±0.5% 容差）':' ⚠️ 未达标');
+    let h='';
+    if(cv<th)h+='<div class="note bad" style="margin:0 0 8px">转化率仍低于 '+th.toFixed(2)+'%（阶段一目标）：<b>优先修承接</b>（主图/详情/SKU），此时加预算会加速烧钱。</div>';
+    else h+='<div class="note ok" style="margin:0 0 8px">转化率已达阶段一目标，可以进入<b>量放大</b>阶段。</div>';
+    const need=gmv?TGT/gmv:0;
+    if(need>1)h+='<div style="font-size:13px">距目标还差 <b>'+((need-1)*100).toFixed(1)+'%</b>，可拆解为：访客×'+(1+(need-1)*0.4).toFixed(2)+' ｜ 转化率×'+(1+(need-1)*0.4).toFixed(2)+' ｜ 客单价×'+(1+(need-1)*0.2).toFixed(2)+'（建议配比 40%:40%:20%）</div>';
+    else h+='<div style="font-size:13px">已达成/超过 D'+PL.days+' 目标，建议把增量转向<b>毛利与退款率</b>治理。</div>';
+    $('#o-hint').innerHTML=h;
+  }
+  const set=p=>{const s=preset(p);$('#s-uv').value=s.uv;$('#s-cv').value=s.cv;$('#s-aov').value=s.aov;upd();};
+  ['s-uv','s-cv','s-aov'].forEach(id=>$('#'+id).addEventListener('input',upd));
+  document.querySelectorAll('#p-sim button[data-preset]').forEach(b=>b.addEventListener('click',()=>set(PR[+b.dataset.preset])));
+  set(PR[0]);
+})();
+
+/* ---------- 7 缺口 ---------- */
+(function(){
+  const E=DATA.errors||[],G=A.gaps||[],odd=DATA.anomalies||[];
+  const rows=[['数据通路','生意参谋（本店，只读）'],
+     ['可用区间',first.d+' ~ '+last.d+'（'+ND+' 天）：前 '+N+' 天（'+earlier[0]+' ~ '+earlier[1]+'）对比后 '+N+' 天（'+later[0]+' ~ '+later[1]+'）'],
+     ['结论摘要口径','整段按日相加，访客、买家没有去重'],
+     ['加购率口径','加购人数 ÷ 访客数（生意参谋的访问加购转化率）；同店对标表里商品排行没有加购人数，按加购件数 ÷ 访客'],
+     ['客单价口径','支付金额 ÷ 支付买家数'],
+     ['搜索引导访客','生意参谋商品排行的「搜索引导访客数」，每天单独查一次'],
+     ['同店对标口径','后 '+N+' 天的商品排行（按支付金额前 60 个）里和本宝贝同一个一级类目的商品；同店最佳只比访客 ≥ '+fmt(DATA.floor)+' 的（访客太少的转化率不稳）'],
+     ['退款率口径','成功退款金额 ÷ 支付金额（退款按完结时间算）']];
+  if(odd.length)rows.push(['异常日',odd.map(a=>mmdd(a.d)+' 平均每人'+a.what+' '+a.per+' 件').join('；')+'（批发、测试单或拍错），含这几天的件数不能直接比']);
+  if(MASK)rows.push(['脱敏','金额、访客、买家、件数折成指数（本品后 '+N+' 天日均 = 100），比率照留']);
+  $('#p-gap').innerHTML=`
+<h2>七、数据缺口与补数清单</h2>
+<div class="note warn"><b>说明：</b>${E.length?'这次没取到：'+E.map(e=>esc(e.part)).join('、')+'。':'这次要取的数据都取到了。'}本报告只用生意参谋本店数据，未对竞品做任何数值假设。</div>
+${E.length?'<ul class="tight" style="font-size:13px">'+E.map(e=>'<li>'+esc(e.part)+'：'+esc(e.message)+'</li>').join('')+'</ul>':''}
+${G.length?`<h3>补数清单（拿到后可直接回填本报告）</h3>
+<div class="tw"><table><thead><tr><th class="l">维度</th><th class="l">需要字段</th><th class="l">用途</th></tr></thead><tbody>
+${G.map(g=>'<tr><td class="l">'+md(g.dim)+'</td><td class="l">'+md(g.fields||'')+'</td><td class="l">'+md(g.use||'')+'</td></tr>').join('')}
+</tbody></table></div>`:''}
+<h3>数据口径与提醒</h3>
+<div class="tw"><table><thead><tr><th class="l">项目</th><th class="l">说明</th></tr></thead><tbody>
+${rows.map(r=>'<tr><td class="l" style="white-space:nowrap">'+r[0]+'</td><td class="l">'+esc(r[1])+'</td></tr>').join('')}
+</tbody></table></div>
+<h3>配套交付物</h3>
+<ul class="tight" style="font-size:13px">
+  <li>本报告（HTML 单文件·离线交互）</li>
+  <li>执行跟踪表（同名 .xlsx）：每日门槛、动作清单、每日数据、两个周期对比、同店对标</li>
+  <li>数据文件（.data.json）：取到的全部数据，给 AI 写分析用</li>
+  <li>每周复盘：<code>item-report --track --analysis 分析文件</code>，从 D1 起逐天对照门槛</li>
+</ul>
+`;
+})();
+
+/* ---------- 工具 ---------- */
+function exportTable(id,name){
+  const t=document.getElementById(id);if(!t)return;
+  const rows=[...t.querySelectorAll('tr')].map(tr=>[...tr.children].map(td=>{
+    let s=(td.innerText||'').replace(/\s+/g,' ').trim();
+    if(/^[\d,]+(\.\d+)?%?$/.test(s))s=s.replace(/,/g,'');
+    return '"'+s.replace(/"/g,'""')+'"';
+  }).join(','));
+  const blob=new Blob(['﻿'+rows.join('\r\n')],{type:'text/csv;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name+'.csv';a.click();
+}
+window.addEventListener('resize',()=>{clearTimeout(window._rz);window._rz=setTimeout(()=>{
+  document.querySelectorAll('.chartbox').forEach(h=>h._redraw&&h._redraw());},200);});
+</script>
+</body>
+</html>

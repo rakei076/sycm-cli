@@ -1,3 +1,8 @@
 browser-cookie3>=0.20
 curl-cffi>=0.7
 websocket-client>=1.8
+mcp~=2.3
+# 竞品评价：写 Excel、处理买家秀图片、渲染报告
+openpyxl>=3.1
+Pillow>=10.0
+jinja2>=3.1

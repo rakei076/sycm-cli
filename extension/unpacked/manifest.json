@@ -2,12 +2,11 @@
   "manifest_version": 3,
   "name": "taobao-cli 取数桥",
   "short_name": "taobao-cli",
-  "version": "0.4.2",
-  "description": "只读取数桥，装一个就够：sycm-cli 生意参谋、alimama-cli 万相台、qianniu-cli 千牛、dmp-cli 达摩盘、1688 订单、taobao-voc 竞品评价都用它。不修改、不上传。更多工具：rakel.top/tools",
+  "version": "0.5.5",
+  "description": "让你电脑上的店铺数据工具借用浏览器里已登录的淘宝、天猫、1688 卖家后台读取数据。只读，数据只交给本机，不上传。",
   "minimum_chrome_version": "116",
   "permissions": [
     "scripting",
-    "tabs",
     "alarms",
     "storage",
     "cookies"
@@ -19,7 +18,16 @@
     "https://sycm.taobao.com/*",
     "https://one.alimama.com/*",
     "https://air.1688.com/*",
+    "https://sycm.1688.com/*",
     "https://item.taobao.com/*",
+    "https://login.taobao.com/*",
+    "https://login.tmall.com/*",
+    "https://login.1688.com/*",
+    "https://login.m.taobao.com/*",
+    "https://havanalogin.taobao.com/*",
+    "https://passport.alibaba.com/*",
+    "https://passport.taobao.com/*",
+    "https://error.taobao.com/*",
     "http://127.0.0.1/*"
   ],
   "background": {
@@ -34,6 +42,7 @@
         "https://one.alimama.com/*",
         "https://air.1688.com/*",
         "https://work.1688.com/*",
+        "https://sycm.1688.com/*",
         "https://item.taobao.com/*",
         "https://www.taobao.com/*"
       ],

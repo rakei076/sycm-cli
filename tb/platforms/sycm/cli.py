@@ -1635,6 +1635,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     from . import item as sycm_item
     sycm_item.register(sp, yesterday)
+    from . import report as sycm_report
+    sycm_report.register(sp, yesterday)
 
     # 命名子命令：每个高频页面一个
     for name, preset in LIST_PRESETS.items():

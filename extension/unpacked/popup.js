@@ -5,6 +5,7 @@ const TOOLS = [
   ["qianniu-cli", "千牛", "评价、商品、物流"],
   ["dmp-cli", "达摩盘", "人群资产、画像"],
   ["alibaba-cli", "1688", "订单统计"],
+  ["alisycm-cli", "1688", "生意参谋"],
   ["voc-cli", "taobao-voc", "竞品评价、问大家（买家账号）"],
 ];
 

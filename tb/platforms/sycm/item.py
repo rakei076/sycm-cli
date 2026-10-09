@@ -953,7 +953,8 @@ DETAIL_RATE_FIELDS = ("itemLossRate", "itemCartConvertRate", "itemPayConvertRate
 
 
 def _pct(v: Any) -> str:
-    return "-" if v is None else f"{v * 100:.2f}%"
+    # 平台对空值回 {}，_value_of 会把它变成「—」：不是数字一律打横杠（2026-10-08 video-list 撞上：字符串被乘 100 再格式化，整条命令崩）
+    return f"{v * 100:.2f}%" if isinstance(v, (int, float)) and not isinstance(v, bool) else "-"
 
 
 def _fetch_detail(path: str, *, item_id: str, start_date: str, end_date: str,
@@ -986,17 +987,22 @@ def flatten_detail_floors(rows: list[dict[str, Any]], prefix: str = "") -> list[
     return flat
 
 
+def fetch_item_detail(*, item_id: str, start_date: str, end_date: str,
+                      cookies: dict[str, str]) -> dict[str, Any]:
+    """详情分析：核心概况（本店 vs 同行均值 / 同行优秀）+ 详情页逐屏。"""
+    overview = _fetch_detail("/cc/item/detail/analysis/overview.json", item_id=item_id,
+                             start_date=start_date, end_date=end_date, cookies=cookies) or {}
+    floors = _fetch_detail("/cc/item/detail/analysis/list.json", item_id=item_id,
+                           start_date=start_date, end_date=end_date, cookies=cookies) or []
+    return {"overview": overview, "floors": floors}
+
+
 def cmd_item_detail(args: argparse.Namespace) -> None:
     cookies = load_taobao_cookies()
     item_id = resolve_item_id(args, cookies=cookies)
     end = args.end_date or args.date
-
-    overview = _fetch_detail("/cc/item/detail/analysis/overview.json",
-                              item_id=item_id, start_date=args.date,
-                              end_date=end, cookies=cookies) or {}
-    floors = _fetch_detail("/cc/item/detail/analysis/list.json",
-                            item_id=item_id, start_date=args.date,
-                            end_date=end, cookies=cookies) or []
+    got = fetch_item_detail(item_id=item_id, start_date=args.date, end_date=end, cookies=cookies)
+    overview, floors = got["overview"], got["floors"]
 
     if args.out:
         Path(args.out).write_text(json.dumps(
@@ -1055,22 +1061,30 @@ def _fetch_price(path: str, *, item_id: str, cookies: dict[str, str],
                     referer=f"{REFERER_ARCHIVES}?activeKey=price").get("data")
 
 
+def fetch_item_cate(*, item_id: str, cookies: dict[str, str]) -> str:
+    """商品的类目全名「一级>二级>叶子」（价格分析页的商品信息里带着）。"""
+    info = _fetch_price("/cc/item/price/info.json", item_id=item_id, cookies=cookies) or {}
+    return (info.get("cateName") or "").replace("&gt;", ">")
+
+
+def fetch_item_price(*, item_id: str, start_date: str, end_date: str,
+                     cookies: dict[str, str]) -> dict[str, Any]:
+    """价格分析：挂牌价和类目、本款所在价格带、类目各价格带大盘（大盘要市场类权限，没有时是空的）。"""
+    dr = {"dateType": "day" if start_date == end_date else _infer_cc_date_type(start_date, end_date),
+          "dateRange": f"{start_date}|{end_date}"}
+    return {"info": _fetch_price("/cc/item/price/info.json", item_id=item_id, cookies=cookies) or {},
+            "segment": _fetch_price("/cc/item/price/getCateId.json", item_id=item_id,
+                                    cookies=cookies, date_params=dr) or {},
+            "bands": _fetch_price("/mc/item/price/band/info/v3.json", item_id=item_id,
+                                  cookies=cookies, date_params=dr) or []}
+
+
 def cmd_item_price(args: argparse.Namespace) -> None:
     cookies = load_taobao_cookies()
     item_id = resolve_item_id(args, cookies=cookies)
     end = args.end_date or args.date
-    dr = {"dateType": "day" if args.date == end
-                       else _infer_cc_date_type(args.date, end),
-          "dateRange": f"{args.date}|{end}"}
-
-    info = _fetch_price("/cc/item/price/info.json",
-                         item_id=item_id, cookies=cookies) or {}
-    seg = _fetch_price("/cc/item/price/getCateId.json", item_id=item_id,
-                        cookies=cookies, date_params=dr) or {}
-    bands = _fetch_price("/mc/item/price/band/info/v3.json", item_id=item_id,
-                          cookies=cookies, date_params=dr) or []
-
-    payload = {"info": info, "segment": seg, "bands": bands}
+    payload = fetch_item_price(item_id=item_id, start_date=args.date, end_date=end, cookies=cookies)
+    info, seg, bands = payload["info"], payload["segment"], payload["bands"]
     if args.out:
         Path(args.out).write_text(json.dumps(payload, ensure_ascii=False, indent=2))
         print(f"已写入 {args.out}", file=sys.stderr)
@@ -1116,25 +1130,29 @@ TITLE_REC_GROUPS: dict[str, str] = {
 }
 
 
+def fetch_item_title(*, item_id: str, start_date: str, end_date: str,
+                     cookies: dict[str, str]) -> dict[str, Any]:
+    """标题分词效果（每个词引来多少搜索访客）+ 推荐词。"""
+    base = {
+        "token": cookies.get("_tb_token_", ""),
+        "itemId": item_id,
+        "dateType": "day" if start_date == end_date else _infer_cc_date_type(start_date, end_date),
+        "dateRange": f"{start_date}|{end_date}",
+        "device": "0",
+    }
+    referer = f"{REFERER_ARCHIVES}?activeKey=title"
+    return {"words": _api_get("/cc/item/v2/getTitleWords.json", dict(base, _=_now_ms()), cookies,
+                              referer=referer).get("data") or [],
+            "recommend": _api_get("/cc/item/title/v2/word/recommend.json", dict(base, _=_now_ms()), cookies,
+                                  referer=referer).get("data") or {}}
+
+
 def cmd_item_title(args: argparse.Namespace) -> None:
     cookies = load_taobao_cookies()
     item_id = resolve_item_id(args, cookies=cookies)
     end = args.end_date or args.date
-    base = {
-        "token": cookies.get("_tb_token_", ""),
-        "itemId": item_id,
-        "dateType": "day" if args.date == end
-                    else _infer_cc_date_type(args.date, end),
-        "dateRange": f"{args.date}|{end}",
-        "device": "0",
-    }
-
-    words = _api_get("/cc/item/v2/getTitleWords.json",
-                     dict(base, _=_now_ms()), cookies,
-                     referer=f"{REFERER_ARCHIVES}?activeKey=title").get("data") or []
-    rec = _api_get("/cc/item/title/v2/word/recommend.json",
-                   dict(base, _=_now_ms()), cookies,
-                   referer=f"{REFERER_ARCHIVES}?activeKey=title").get("data") or {}
+    got = fetch_item_title(item_id=item_id, start_date=args.date, end_date=end, cookies=cookies)
+    words, rec = got["words"], got["recommend"]
 
     if args.out:
         Path(args.out).write_text(json.dumps(
@@ -1182,30 +1200,35 @@ def cmd_item_title(args: argparse.Namespace) -> None:
 BUNDLE_SELLER_ORDER_BY = "recent7AItmUv"
 
 
+def fetch_item_bundle(*, item_id: str, start_date: str, end_date: str, cookies: dict[str, str],
+                      page: int = 1, limit: int = 10) -> dict[str, list[dict[str, Any]]]:
+    """关联搭配：系统的连带商品推荐（买了这个款的人还买了什么）+ 掌柜自己配的搭配。"""
+    base = {
+        "token": cookies.get("_tb_token_", ""),
+        "itemId": item_id,
+        "dateType": "day" if start_date == end_date else _infer_cc_date_type(start_date, end_date),
+        "dateRange": f"{start_date}|{end_date}",
+        "device": "0",
+        "page": str(page),
+        "pageSize": str(limit),
+    }
+    ref = f"{REFERER_ARCHIVES}?activeKey=bundle"
+    system = _api_get("/cc/item/bundle/recommend.json",
+                      dict(base, _=_now_ms()), cookies, referer=ref).get("data") or []
+    seller_raw = _api_get("/cc/item/bundle/sellerRecommend.json",
+                          dict(base, _=_now_ms(), order="desc", orderBy=BUNDLE_SELLER_ORDER_BY),
+                          cookies, referer=ref).get("data") or {}
+    seller = (seller_raw.get("data") if isinstance(seller_raw, dict) else seller_raw) or []
+    return {"system": system, "seller": seller}
+
+
 def cmd_item_bundle(args: argparse.Namespace) -> None:
     cookies = load_taobao_cookies()
     item_id = resolve_item_id(args, cookies=cookies)
     end = args.end_date or args.date
-    base = {
-        "token": cookies.get("_tb_token_", ""),
-        "itemId": item_id,
-        "dateType": "day" if args.date == end
-                    else _infer_cc_date_type(args.date, end),
-        "dateRange": f"{args.date}|{end}",
-        "device": "0",
-        "page": str(args.page),
-        "pageSize": str(args.limit),
-    }
-    ref = f"{REFERER_ARCHIVES}?activeKey=bundle"
-
-    system = _api_get("/cc/item/bundle/recommend.json",
-                      dict(base, _=_now_ms()), cookies, referer=ref).get("data") or []
-    seller_raw = _api_get("/cc/item/bundle/sellerRecommend.json",
-                          dict(base, _=_now_ms(), order="desc",
-                               orderBy=BUNDLE_SELLER_ORDER_BY),
-                          cookies, referer=ref).get("data") or {}
-    seller = (seller_raw.get("data") if isinstance(seller_raw, dict)
-              else seller_raw) or []
+    got = fetch_item_bundle(item_id=item_id, start_date=args.date, end_date=end, cookies=cookies,
+                            page=args.page, limit=args.limit)
+    system, seller = got["system"], got["seller"]
 
     if args.out:
         Path(args.out).write_text(json.dumps(
@@ -1323,26 +1346,33 @@ def _content_window(args: argparse.Namespace) -> tuple[str, str]:
     return args.date, args.end_date or args.date
 
 
-def cmd_item_content(args: argparse.Namespace) -> None:
-    cookies = load_taobao_cookies()
-    item_id = resolve_item_id(args, cookies=cookies)
-    start, end = _content_window(args)
+def fetch_item_content(*, item_id: str, start_date: str, end_date: str, cookies: dict[str, str],
+                       page: int = 1, limit: int = 10) -> Any:
+    """内容分析：关联视频 / 内容带来的种草点击、收藏、加购、支付（汇总 + 逐条）。"""
     params = {
         "_": _now_ms(),
         "token": cookies.get("_tb_token_", ""),
         # 注意：这个接口用 keyword 传商品 ID，不是 itemId
         "keyword": item_id,
-        "dateType": _infer_cc_date_type(start, end),
-        "dateRange": f"{start}|{end}",
-        "page": str(args.page),
-        "pageSize": str(args.limit),
+        "dateType": _infer_cc_date_type(start_date, end_date),
+        "dateRange": f"{start_date}|{end_date}",
+        "page": str(page),
+        "pageSize": str(limit),
         "order": "desc",
         "orderBy": "interestPayAmt",
         "accountRole": "guanghe-all",
         "indexCode": CONTENT_INDEX_CODES,
     }
-    raw = _api_get("/s_content/forcc/video/single/item/list.json", params, cookies,
-                   referer=f"{REFERER_ARCHIVES}?activeKey=content").get("data") or {}
+    return _api_get("/s_content/forcc/video/single/item/list.json", params, cookies,
+                    referer=f"{REFERER_ARCHIVES}?activeKey=content").get("data") or {}
+
+
+def cmd_item_content(args: argparse.Namespace) -> None:
+    cookies = load_taobao_cookies()
+    item_id = resolve_item_id(args, cookies=cookies)
+    start, end = _content_window(args)
+    raw = fetch_item_content(item_id=item_id, start_date=start, end_date=end, cookies=cookies,
+                             page=args.page, limit=args.limit)
     rows = (raw.get("data") if isinstance(raw, dict) else raw) or []
 
     if args.out:
@@ -1395,26 +1425,31 @@ SERVICE_INDEX_CODES = ",".join(
     c for own, cmp_, _ in SERVICE_PAIRS for c in (own, cmp_) if c)
 
 
-def cmd_item_service(args: argparse.Namespace) -> None:
-    cookies = load_taobao_cookies()
-    item_id = resolve_item_id(args, cookies=cookies)
-    end = args.end_date or args.date
+def fetch_item_service(*, item_id: str, start_date: str, end_date: str,
+                       cookies: dict[str, str]) -> dict[str, Any]:
+    """服务体验：咨询、售后、主动评价、问大家、退款，每项带同类商品平均。"""
     params = {
         "_": _now_ms(),
         "token": cookies.get("_tb_token_", ""),
         "domainCode": "tao.shop.qos.item",
         "showType": "overview",
         "device": "0",
-        "dateType": "day" if args.date == end
-                    else _infer_cc_date_type(args.date, end),
-        "dateRange": f"{args.date}|{end}",
+        "dateType": "day" if start_date == end_date else _infer_cc_date_type(start_date, end_date),
+        "dateRange": f"{start_date}|{end_date}",
         "indexCodes": SERVICE_INDEX_CODES,
         # needCycleCrc 在 extMap 里面，不是独立参数（见上方注释）
         "extMap": json.dumps({"itemId": item_id, "needCycleCrc": True},
                               separators=(",", ":")),
     }
-    data = _api_get("/domain/oneQuery.json", params, cookies,
+    return _api_get("/domain/oneQuery.json", params, cookies,
                     referer=f"{REFERER_ARCHIVES}?activeKey=service").get("data") or {}
+
+
+def cmd_item_service(args: argparse.Namespace) -> None:
+    cookies = load_taobao_cookies()
+    item_id = resolve_item_id(args, cookies=cookies)
+    end = args.end_date or args.date
+    data = fetch_item_service(item_id=item_id, start_date=args.date, end_date=end, cookies=cookies)
 
     if args.out:
         Path(args.out).write_text(json.dumps(data, ensure_ascii=False, indent=2))
@@ -1557,6 +1592,18 @@ VIDEO_COLUMNS: list[tuple[str, str, bool]] = [
 ]
 
 
+def fetch_item_video(*, item_id: str, start_date: str, end_date: str, cookies: dict[str, str]) -> list[dict[str, Any]]:
+    """这个商品自己的视频（keyword 传商品 ID 就只回它；itemId 参数会被忽略，2026-10-08 实测）。"""
+    params = {"_": _now_ms(), "token": cookies.get("_tb_token_", ""), "keyword": item_id,
+              "dateType": "day" if start_date == end_date else _infer_cc_date_type(start_date, end_date),
+              "dateRange": f"{start_date}|{end_date}", "device": "0", "page": "1", "pageSize": "10",
+              "order": "desc", "orderBy": "itemExposeUv"}
+    data = _api_get("/cc/video/detail/list.json", params, cookies,
+                    referer="https://sycm.taobao.com/cc/video/analysis").get("data") or {}
+    rows = data.get("data") if isinstance(data, dict) else data
+    return [r for r in rows or [] if str(_value_of(r.get("itemId"))) == str(item_id)]
+
+
 def cmd_video_list(args: argparse.Namespace) -> None:
     cookies = load_taobao_cookies()
     data = _api_get("/cc/video/detail/list.json",
@@ -1643,13 +1690,19 @@ ALARM_COUNTS: list[tuple[str, str]] = [
 ]
 
 
+def fetch_problem_alarm(*, cookies: dict[str, str], day: str, limit: int = 50) -> dict[str, Any]:
+    """问题预警（实时）：质量问题 / 缺货 / 高价限流商品计数 + 缺货明细。"""
+    ref = "https://sycm.taobao.com/cc/problem_alarm"
+    params = lambda: {"_": _now_ms(), "token": cookies.get("_tb_token_", ""), "dateType": "day",
+                      "dateRange": f"{day}|{day}", "device": "0", "page": "1", "pageSize": str(limit)}
+    return {"statistics": _api_get("/cc/prolemitem/statistics.json", params(), cookies, referer=ref).get("data") or {},
+            "stockout": _api_get("/cc/exp/stock/out.json", params(), cookies, referer=ref).get("data") or {}}
+
+
 def cmd_problem_alarm(args: argparse.Namespace) -> None:
     cookies = load_taobao_cookies()
-    ref = "https://sycm.taobao.com/cc/problem_alarm"
-    stats = _api_get("/cc/prolemitem/statistics.json",
-                     _page_params(args, cookies), cookies, referer=ref).get("data") or {}
-    stock = _api_get("/cc/exp/stock/out.json",
-                     _page_params(args, cookies), cookies, referer=ref).get("data") or {}
+    got = fetch_problem_alarm(cookies=cookies, day=args.date, limit=args.limit)
+    stats, stock = got["statistics"], got["stockout"]
 
     if _emit(args, {"statistics": stats, "stockout": stock}):
         return
