@@ -29,13 +29,14 @@ def _plugin() -> int:
     return 0 if ok else 1
 
 
-GLOBAL_OPTIONS = {"--account": "TB_ACCOUNT", "--shop": "TB_SHOP"}
+GLOBAL_OPTIONS = {"--account": "TB_ACCOUNT", "--shop": "TB_SHOP", "--browser": "TB_BROWSER"}
 
 
 def _take_globals(argv: list[str]) -> list[str]:
     """放在平台前面的总选项，放进环境变量交给取数那一层：
     tb --account <名字> <平台> <命令…>   先换成这个账号再取数（TB_ACCOUNT）
-    tb --shop <店铺编号> <平台> <命令…>  这个登录能看几家店时，只要这一家的数据（TB_SHOP）"""
+    tb --shop <店铺编号> <平台> <命令…>  这个登录能看几家店时，只要这一家的数据（TB_SHOP）
+    tb --browser <账号名或插件编号> <平台> <命令…>  几个浏览器都装了取数桥时，用登录这个账号的那个（TB_BROWSER，按工具记住）"""
     while argv:
         name, _, value = argv[0].partition("=")
         if name not in GLOBAL_OPTIONS:
@@ -59,6 +60,7 @@ def main(argv: list[str] | None = None) -> int:
               + "\n打开 / 关闭工具：tb modules\n检查插件：tb plugin"
               "\n给 AI 客户端用的 MCP 服务：tb mcp\n切换账号：tb account（读取指定账号的数据：tb --account <账号名称> <平台> <命令>）"
               "\n指定店铺（一个账号可查看多个店铺时）：tb --shop <店铺编号> <平台> <命令>"
+              "\n几个浏览器都装了取数桥时指定用哪个：tb --browser <账号名或插件编号> <平台> <命令>（按工具记住，tb browser 查看）"
               "\n运行日志：tb log（遇到问题时运行 tb log export，并将生成的 zip 文件发送给开发者）"
               "\n分析方法：tb guide（自定义分析要求保存在 tb guide --where 显示的文件夹中，优先使用）")
         return 0
@@ -104,6 +106,9 @@ def _dispatch(argv: list[str]) -> int:
     if argv[0] == "account":
         from .core import accounts
         return accounts.main(argv[1:])
+    if argv[0] == "browser":
+        from .core import browsers
+        return browsers.main(argv[1:])
     name, rest = argv[0], argv[1:]
     if name not in PLATFORMS:
         print(f"❌ 不认识的平台：{name}。可用：{'、'.join(PLATFORMS)}", file=sys.stderr)

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "taobao-cli 取数桥",
   "short_name": "taobao-cli",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "description": "让你电脑上的店铺数据工具借用浏览器里已登录的淘宝、天猫卖家后台读取数据，并能在多个账号之间一键切换。只读，数据只交给本机，不上传。",
   "minimum_chrome_version": "116",
   "permissions": [

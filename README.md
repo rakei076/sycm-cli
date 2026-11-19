@@ -136,14 +136,9 @@ MIT。仅供店铺经营者查询自家数据，请遵守平台规则。
 
 ## 联系作者
 
-有想法、有需求，欢迎加微信找我，并注明来意。想要帮你装好、按你的需求定制，也可以直接问。
+有想法、有需求，欢迎在 X 上私信我，并注明来意。想要帮你装好、按你的需求定制，也可以直接问。
 
-- 微信：扫下方二维码加好友
-- X / Twitter：[@Rakel076](https://x.com/Rakel076)
-
-<p align="center">
-  <img src="assets/wechat-qr.jpg" alt="WeChat QR" width="240">
-</p>
+- X / Twitter：[@Rakel076](https://x.com/Rakel076)（私信）
 
 如果这个工具帮到了你，欢迎给个 ⭐️。
 

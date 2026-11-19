@@ -12,7 +12,7 @@ import sys
 import time
 from datetime import datetime
 
-from . import bridge, runlog, transport
+from . import bridge, browsers, runlog, transport
 from .platform import Platform
 
 ACCOUNT = Platform(
@@ -31,7 +31,12 @@ def _connect() -> bridge.BridgeServer:
     if not transport._wait_for_extension(server, transport.CONNECT_WAIT_FORCED):
         server.stop()
         raise bridge.BridgeError("没有连上浏览器插件：账号切换要用取数桥插件。确认 Chrome 开着、插件开着，再试一次。")
-    got, need = server.extension_version, bridge.min_version(ACCOUNT)
+    try:
+        browsers.choose(server, ACCOUNT)   # 几个浏览器都装了插件时，换号只对选定的那个浏览器
+    except BaseException:
+        server.stop()
+        raise
+    got, need = server.version_of(server.bound), bridge.min_version(ACCOUNT)
     if bridge.version_tuple(got) < bridge.version_tuple(need):
         server.stop()
         raise bridge.BridgeError(f"浏览器里的取数桥插件是 {got or '旧版'}，账号切换要 {need} 以上：请更新插件。")

@@ -15,8 +15,8 @@ from __future__ import annotations
 
 import json
 import json as _json   # BridgeSession.post 的参数名叫 json（和 curl_cffi 一致），会遮住模块名
-import queue
 import threading
+import time
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from types import SimpleNamespace
@@ -54,6 +54,42 @@ def port_range(plat: Platform) -> tuple[int, int]:
     """测试时用 <PREFIX>_BRIDGE_PORT 指定专属端口，避免和日常 Chrome 里的插件抢任务。"""
     p = plat.env("BRIDGE_PORT")
     return (int(p), int(p)) if p else DEFAULT_PORT_RANGE
+
+
+def form_body(data: dict) -> str:
+    """POST 的表单写法：字符串、数字原样，布尔写 true/false，列表和对象写成 JSON 字符串（网关按 JSON 解析这些字段）。"""
+    def one(v):
+        if isinstance(v, bool):
+            return "true" if v else "false"
+        if isinstance(v, (list, dict)):
+            return _json.dumps(v, ensure_ascii=False, separators=(",", ":"))
+        return "" if v is None else str(v)
+    return urlencode({k: one(v) for k, v in (data or {}).items()})
+
+
+class JobBox:
+    """等插件来领的任务。带 to 的只给那个插件实例；不带的谁先来谁拿。"""
+
+    def __init__(self):
+        self._jobs: list[dict] = []
+        self._cv = threading.Condition()
+
+    def put(self, job: dict) -> None:
+        with self._cv:
+            self._jobs.append(job)
+            self._cv.notify_all()
+
+    def take(self, instance: str, timeout: float) -> dict | None:
+        end = time.monotonic() + timeout
+        with self._cv:
+            while True:
+                for i, job in enumerate(self._jobs):
+                    if not job.get("to") or job["to"] == instance:
+                        return self._jobs.pop(i)
+                left = end - time.monotonic()
+                if left <= 0:
+                    return None
+                self._cv.wait(left)
 
 
 def allowed_prefixes(plat: Platform) -> tuple[str, ...]:
@@ -220,12 +256,15 @@ class _Handler(BaseHTTPRequestHandler):
             return self._send(403, '{"error":"forbidden"}')
         url = urlsplit(self.path)
         version = parse_qs(url.query).get("v", [""])[0]
+        inst = parse_qs(url.query).get("i", [""])[0]
         if version:   # 插件报的自己的版本
             self.server.extension_version = version
-        self.server.saw_instance(parse_qs(url.query).get("i", [""])[0])   # 插件 0.8.0 起报自己的实例编号
+            if inst:
+                self.server.versions[inst] = version
+        self.server.saw_instance(inst)   # 插件 0.8.0 起报自己的实例编号
         if url.path == "/hello":
             self.server.extension_seen.set()
-            self.server.requeue_taken()   # 插件重连（多半是被 Chrome 休眠后重启）：领走没交结果的任务再派一次
+            self.server.requeue_taken(inst)   # 插件重连（多半是被 Chrome 休眠后重启）：它领走没交结果的任务再派一次
             hello = {"app": self.server.platform.hello_app, "version": 1}
             build = _dev_build()
             if build:
@@ -234,11 +273,10 @@ class _Handler(BaseHTTPRequestHandler):
         if url.path == "/next":
             self.server.extension_seen.set()
             wait = min(max(float(parse_qs(url.query).get("wait", ["20"])[0]), 0.0), 25.0)
-            try:
-                job = self.server.jobs.get(timeout=wait)
-            except queue.Empty:
+            job = self.server.jobs.take(inst, wait)
+            if job is None:
                 return self._send(204)
-            self.server.taken[job["id"]] = job
+            self.server.taken[job["id"]] = (job, inst)
             _dbg(self.server.platform, f"插件取走任务 {_what(job)}")
             return self._send(200, json.dumps(job))
         self._send(404)
@@ -271,12 +309,14 @@ class BridgeServer(ThreadingHTTPServer):
 
     def __init__(self, platform: Platform):
         self.platform = platform
-        self.jobs: "queue.Queue[dict]" = queue.Queue()
+        self.jobs = JobBox()
+        self.bound: str | None = None    # 选定的插件实例（几个浏览器都装了插件时，任务只派给它；见 browsers.choose）
         self.pending: dict[str, dict] = {}
-        self.taken: dict[str, dict] = {}   # 插件领走、还没交结果的任务
+        self.taken: dict[str, tuple[dict, str]] = {}   # 插件领走、还没交结果的任务：编号 → (任务, 领走的插件实例)
         self.extension_seen = threading.Event()
         self.browser: str | None = None   # 插件回报的浏览器信息（第一次收到结果时记录），用来告诉用户是哪个浏览器在取数
         self.extension_version: str | None = None   # 插件报的版本；旧插件不报，保持 None
+        self.versions: dict[str, str] = {}           # 每个插件实例报的版本（几个浏览器都装了插件时版本可能不同）
         self.instances: list[str] = []   # 来连过的插件实例编号（一台电脑上几个浏览器 / Chrome 资料都装了插件时不止一个）
         last: Exception | None = None
         lo, hi = port_range(platform)
@@ -298,23 +338,28 @@ class BridgeServer(ThreadingHTTPServer):
         self._thread: threading.Thread | None = None
 
     def saw_instance(self, inst: str) -> None:
-        """记下来连的插件实例；第二个出现时在终端提醒一次：任务会被随机哪一个接走，各自登录的可能是不同的店。"""
+        """记下来连的插件实例（一台电脑上几个浏览器 / Chrome 用户资料都装了插件时不止一个；选哪个见 browsers.choose）。"""
         if not inst or inst in self.instances:
             return
         self.instances.append(inst)
         from . import runlog
         runlog.event("instance", instance=inst, count=len(self.instances))
         if len(self.instances) == 2:
-            import sys
-            print(f"⚠️ 检测到这台电脑上有 {len(self.instances)} 个取数桥插件同时在线（安装在不同的浏览器或 Chrome 用户资料中）。"
-                  "请求可能由其中任意一个处理，而它们登录的可能是不同的账号和店铺。请只保留一个浏览器启用取数桥插件，"
-                  "在其他浏览器的 chrome://extensions 中将其关闭。", file=sys.stderr, flush=True)
+            from . import browsers
+            browsers.mark_multi()
 
-    def requeue_taken(self) -> None:
-        for job_id, job in list(self.taken.items()):
+    def requeue_taken(self, instance: str = "") -> None:
+        """只重派这个插件自己领走、还没交结果的任务：别的插件来连，不能把正在别处执行的任务再派一遍。"""
+        for job_id, (job, by) in list(self.taken.items()):
+            if by != instance:
+                continue
             if self.taken.pop(job_id, None) is not None and job_id in self.pending:
                 _dbg(self.platform, f"插件重连，重新派发 {_what(job)}")
                 self.jobs.put(job)
+
+    def version_of(self, instance: str | None) -> str | None:
+        """这个插件报的版本；没指定插件（只有一个、或旧插件不报编号）时用最后报的那个。"""
+        return self.versions.get(instance or "") or self.extension_version
 
     def start(self) -> None:
         self._lock = BridgeLock(_lock_path(self.platform))
@@ -332,13 +377,15 @@ class BridgeServer(ThreadingHTTPServer):
 
     SLOW_NOTICE_AFTER = 8.0
 
-    def submit(self, job: dict, timeout: float) -> dict:
-        """派发一个任务（取数 {"url"} 或读 cookie {"cookie"}）并等结果。launch 告诉插件从哪个平台页面发。"""
+    def submit(self, job: dict, timeout: float, to: str | None = None) -> dict:
+        """派发一个任务（取数 {"url"} 或读 cookie {"cookie"}）并等结果。launch 告诉插件从哪个平台页面发。
+        to：只派给这个插件实例；不给就派给选定的那个（bound），都没有就谁先来谁拿。"""
         job_id = uuid.uuid4().hex
         waiter = {"event": threading.Event(), "result": None}
         self.pending[job_id] = waiter
         _dbg(self.platform, f"派发任务 {_what(job)}")
-        self.jobs.put({"id": job_id, "launch": self.platform.launch_url, **job})
+        target = to or self.bound
+        self.jobs.put({"id": job_id, "launch": self.platform.launch_url, **job, **({"to": target} if target else {})})
         try:
             first = min(self.SLOW_NOTICE_AFTER, timeout)
             if not waiter["event"].wait(first):
@@ -440,7 +487,10 @@ class BridgeSession:
         plat = self.server.platform
         if not plat.bridge_post_allowed(urlsplit(url).path):
             raise BridgeRefused(f"插件桥只放行{plat.display}登记过的只读查询接口，拒绝：{urlsplit(url).path}")
-        body = _json.dumps(json if json is not None else {}, ensure_ascii=False, separators=(",", ":"))
+        data = json if json is not None else {}
+        if url.startswith(plat.bridge_form_hosts) and plat.bridge_form_hosts:
+            return self._reply(self.server.submit({"url": url, "method": "POST", "body": form_body(data), "form": True}, timeout or 60))
+        body = _json.dumps(data, ensure_ascii=False, separators=(",", ":"))
         return self._reply(self.server.submit({"url": url, "method": "POST", "body": body}, timeout or 60))
 
     def cookie(self, name: str) -> str | None:

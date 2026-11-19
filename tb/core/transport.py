@@ -15,7 +15,7 @@ import sys
 import time
 from pathlib import Path
 
-from . import bridge, extension, runlog
+from . import bridge, browsers, extension, runlog
 from .auth import NotLoggedIn
 from .client import Client, TbError
 from .platform import Platform
@@ -129,6 +129,11 @@ def make_client(plat: Platform) -> Client:
             raise TbError("指定账号（--account）需要通过取数桥插件切换，无法与直接读取 Cookie 的方式同时使用。", stage="切换账号",
                           hint=f"请去掉 {plat.env_prefix}_MODE=cookies 后重新运行。")
         m = "extension"
+    if browsers.wanted():
+        if m == "cookies":
+            raise TbError("指定浏览器（--browser）要通过取数桥插件，无法与直接读取 Cookie 的方式同时使用。", stage="选浏览器",
+                          hint=f"请去掉 {plat.env_prefix}_MODE=cookies 后重新运行。")
+        m = "extension"   # 直接读 Cookie 读的是默认 Chrome 资料，不是指定的那个浏览器
     if m == "cookies":
         if windows:
             raise TbError("Windows 上读不到 Chrome 的登录信息，只能通过浏览器插件取数。", stage="连接插件", hint=_install_hint(plat))
@@ -151,7 +156,12 @@ def make_client(plat: Platform) -> Client:
     if not ok:
         server.stop()
         raise TbError("没有连上浏览器插件。", stage="连接插件", hint=_no_connection_hint(plat, found))
-    got = server.extension_version
+    try:
+        browsers.choose(server, plat)   # 几个浏览器都装了插件时选定一个，任务只派给它
+    except BaseException:
+        server.stop()
+        raise
+    got = server.version_of(server.bound)   # 查选定的那个插件的版本
     need = bridge.min_version(plat)
     if bridge.version_tuple(got) < bridge.version_tuple(need):
         server.stop()

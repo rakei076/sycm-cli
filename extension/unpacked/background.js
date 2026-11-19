@@ -55,15 +55,22 @@ const SITES = {
     XSRF: "XSRF-TOKEN",   // 页面自己的请求会把这个 cookie 放进 X-XSRF-TOKEN 头，这里照做
     COOKIES: [],
   },
-  // taobao-voc（买家账号看竞品）：只放行搜索、评价、问大家三个接口。
+  // taobao-voc（买家账号看竞品）：只放行搜索、评价、问大家三个接口，和竞品商品页（读 SKU 价）。
+  // 商品页 PAGES 由插件后台直接请求（天猫商品在 detail.tmall.com，从淘宝的发射台页面里请求会被同源策略挡住）。
   // unb（账号 ID）用来判断登录的是不是买家号、问大家接口要带；它是 HttpOnly，只能用 chrome.cookies 读，且只在这个平台读。
   "https://item.taobao.com/robots.txt": {
     ALLOWED: [/^https:\/\/h5api\.m\.taobao\.com\/h5\/(mtop\.relationrecommend\.wirelessrecommend\.recommend|mtop\.taobao\.rate\.detaillist\.get|mtop\.taobao\.wdj\.list\.merge\.search)\/[0-9.]+\//],
+    PAGES: [/^https:\/\/(item\.taobao\.com|detail\.tmall\.com)\/item\.htm\?id=\d+$/],
     WRITE: /(update|create|delete|modify|save|add|remove|edit|submit|send|post|set|operate|publish|cancel|confirm|pay|refund)/i,
     COOKIES: ["_m_h5_tk", "_m_h5_tk_enc", "tracknick", "unb"],
     HTTPONLY: ["unb"],
   },
 };
+
+// 登记过的商品页（只 GET）：由插件后台直接请求，不经过发射台页面
+function isPage(site, job) {
+  return !job.cookie && (!job.method || job.method === "GET") && (site.PAGES || []).some((re) => re.test(job.url));
+}
 
 function allowed(job) {
   const site = SITES[job.launch];
@@ -78,6 +85,7 @@ function allowed(job) {
       && site.POSTS.some((p) => (typeof p === "string" ? p === u.pathname : p.test(u.pathname)));
   }
   if (job.method && job.method !== "GET") return false;
+  if (isPage(site, job)) return true;
   if (!site.ALLOWED || !site.ALLOWED.some((re) => re.test(job.url))) return false;
   if (site.WRITE.test(u.pathname) && !(site.READS && site.READS.includes(u.pathname))) return false;
   return true;
@@ -85,7 +93,7 @@ function allowed(job) {
 // ---- 放行规则结束 ----
 
 const DEV_AUTO_RELOAD = false;   // build.py 只在开发版里改成 true
-const BUILD = "377574441b6d";        // build.py 写入构建号
+const BUILD = "ec94531cb47e";        // build.py 写入构建号
 const HEADERS = { "X-Dmp-Bridge": chrome.runtime.id };  // 身份头：服务端只认允许的插件 ID（同时让浏览器先发预检）
 // 每次连命令行都报上自己的版本（放在网址参数里，不加新的请求头，免得旧命令行的预检不认）
 const VERSION = chrome.runtime.getManifest().version;
@@ -276,12 +284,14 @@ function pageReadCookie(name) {
   return { value: hit ? hit.slice(name.length + 1) : "" };
 }
 
-async function pageFetch(u, method, body, referrer, xsrf) {
+async function pageFetch(u, method, body, referrer, xsrf, form) {
   try {
     const init = { credentials: "include" };
     if (method === "POST") {
-      const headers = { "Content-Type": "application/json", "Accept": "application/json, text/plain, */*", "X-Requested-With": "XMLHttpRequest" };
-      const hit = xsrf && document.cookie.split("; ").find((c) => c.startsWith(xsrf + "="));
+      // form：跨域网关用表单发（不触发预检，2026-11-19 起达摩盘广告网关不放行 JSON 的预检）；只带 Content-Type，不加别的头
+      const headers = form ? { "Content-Type": "application/x-www-form-urlencoded" }
+        : { "Content-Type": "application/json", "Accept": "application/json, text/plain, */*", "X-Requested-With": "XMLHttpRequest" };
+      const hit = !form && xsrf && document.cookie.split("; ").find((c) => c.startsWith(xsrf + "="));
       if (hit) headers["X-XSRF-TOKEN"] = decodeURIComponent(hit.slice(xsrf.length + 1));
       Object.assign(init, { method: "POST", headers, body: body || "{}" });
       if (referrer) init.referrer = referrer;
@@ -294,7 +304,7 @@ async function pageFetch(u, method, body, referrer, xsrf) {
     // 跟着跳转失败（比如被转去 http 的排队页，被浏览器拦下）：不跟跳转再问一次，确认是不是被转走了
     try {
       const r2 = await fetch(u, { credentials: "include", redirect: "manual", method: method === "POST" ? "POST" : "GET",
-                                  headers: method === "POST" ? { "Content-Type": "application/json" } : undefined,
+                                  headers: method === "POST" ? { "Content-Type": form ? "application/x-www-form-urlencoded" : "application/json" } : undefined,
                                   body: method === "POST" ? (body || "{}") : undefined });
       if (r2.type === "opaqueredirect") return { status: 0, text: "", redirectedAway: true };
     } catch (_) { /* 真的是网络问题 */ }
@@ -302,8 +312,25 @@ async function pageFetch(u, method, body, referrer, xsrf) {
   }
 }
 
+// 后台直接请求一个商品页：带浏览器的登录，跟着跳转；被转去没有权限的地址（风控页）时报 redirectedAway
+async function fetchPage(u) {
+  try {
+    const r = await fetch(u, { credentials: "include" });
+    const out = { status: r.status, text: await r.text(), attempts: 1, tab: { id: 0, url: "插件后台" } };
+    if (r.redirected) out.landed = r.url;
+    return out;
+  } catch (e) {
+    try {
+      const r2 = await fetch(u, { credentials: "include", redirect: "manual" });
+      if (r2.type === "opaqueredirect") return { status: 0, text: "", redirectedAway: true, attempts: 1 };
+    } catch (_) { /* 真的是网络问题 */ }
+    return { error: "请求商品页失败：" + String(e), attempts: 1 };
+  }
+}
+
 async function runInPageInner(job) {
   const site = SITES[job.launch];
+  if (isPage(site, job)) return fetchPage(job.url);
   if (job.cookie && (site.HTTPONLY || []).includes(job.cookie)) {   // HttpOnly 的那一个：只读登记过的名字，且只读发射台所在的站点
     const c = await chrome.cookies.get({ url: new URL(job.launch).origin + "/", name: job.cookie });
     return { value: c ? c.value : "" };
@@ -315,7 +342,7 @@ async function runInPageInner(job) {
       const [res] = await chrome.scripting.executeScript(job.cookie
         ? { target: { tabId: tab.id }, world: "MAIN", args: [job.cookie], func: pageReadCookie }
         : { target: { tabId: tab.id }, world: "MAIN", func: pageFetch,
-            args: [job.url, job.method || "GET", job.body || "", site.REFERRER || "", site.XSRF || ""] });
+            args: [job.url, job.method || "GET", job.body || "", site.REFERRER || "", site.XSRF || "", !!job.form] });
       const out = res && res.result;
       // 现场：从哪个标签页发的、试了几次（写进日志，排查「发射台停在别处」「换号后旧页面」这类问题）
       if (out && !out.network) return { ...out, attempts: attempt + 1, tab: { id: tab.id, url: (tab.url || "").split("?")[0] } };

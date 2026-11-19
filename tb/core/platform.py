@@ -41,6 +41,7 @@ class Platform:
     check_payload: Callable[[Any, Any, Any, str], None] | None = None
     shop_of: Callable[[Any, str], str | None] | None = None  # (回包, 请求地址) -> 是哪家店（店铺编号），认不出返回 None；用来防串店、写日志
     extension_only: bool = False                        # 只走浏览器插件，不退回读本机 Chrome 的 cookie（竞品评价：读 cookie 要系统权限，交付不可行）
+    bridge_form_hosts: tuple[str, ...] = ()             # 走插件时这些域名上的 POST 用表单发（跨域的 JSON POST 要预检，有的网关不放行，见 bridge.post）
     min_extension: str | None = None                    # 这个平台要求的最低插件版本（插件里新加了它的放行规则时填）；不填 = 底座的默认要求
 
     def bridge_post_allowed(self, path: str) -> bool:

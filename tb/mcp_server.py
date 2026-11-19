@@ -75,11 +75,11 @@ def pick(platform: str) -> str:
 
 
 
-async def execute(argv: list[str], timeout: float = TIMEOUT, account: str = "", shop: str = "") -> tuple[int, str, str]:
+async def execute(argv: list[str], timeout: float = TIMEOUT, account: str = "", shop: str = "", browser: str = "") -> tuple[int, str, str]:
     """在子进程里跑命令行。超时或调用被取消时把子进程杀掉，不留后台进程。
     account：先换成这个账号再取数（命令行的 TB_ACCOUNT，换号和取数在同一条命令里，别的调用插不进来）。"""
     env = {**os.environ, "PYTHONUTF8": "1", "PYTHONIOENCODING": "utf-8"}
-    for key, value in (("TB_ACCOUNT", account), ("TB_SHOP", shop)):
+    for key, value in (("TB_ACCOUNT", account), ("TB_SHOP", shop), ("TB_BROWSER", browser)):
         env.pop(key, None)
         if value:
             env[key] = value
@@ -149,32 +149,36 @@ def build() -> MCPServer:
                           "读取指定账号的数据时，account 填写账号名称（account 工具 list 返回的名称）：工具会在同一条命令中先切换账号再读取。"
                           "不要先用 account 工具 use 再调用 run：两步之间账号可能被其他调用切换，导致读取到其他店铺的数据。"
                           "浏览器同一时间只能登录一个账号，不同账号的读取会依次排队执行。"
-                          "一个登录账号可以查看多个店铺时，shop 填写要查看的店铺编号（报错信息中会给出）；不填写时使用该账号首次读取时记录的店铺。" + plat_doc,
+                          "一个登录账号可以查看多个店铺时，shop 填写要查看的店铺编号（报错信息中会给出）；不填写时使用该账号首次读取时记录的店铺。"
+                          "几个浏览器都装了取数桥、报错列出了各浏览器登录的账号时，browser 填用户要看的那个账号名（或插件编号），这个工具以后会记住。" + plat_doc,
               annotations=ro)
-    async def run(command: str, args: list[str] | None = None, platform: str = "", account: str = "", shop: str = "") -> str:
+    async def run(command: str, args: list[str] | None = None, platform: str = "", account: str = "", shop: str = "",
+                  browser: str = "") -> str:
         p, args = pick(platform), list(args or [])
         if command in DENY:
             raise ToolError(DENY[command])
         if "--execute" in args:
             raise ToolError("带 --execute 的是修改店铺的操作，不能通过 AI 运行。请在终端里自己确认后运行。")
-        account, shop = account.strip(), shop.strip()
-        code, out, err = await execute(tb_argv(p, command, *args), account=account, shop=shop)
-        shown = ["tb", *(["--account", account] if account else []), *(["--shop", shop] if shop else []), p, command, *args]
+        account, shop, browser = account.strip(), shop.strip(), browser.strip()
+        code, out, err = await execute(tb_argv(p, command, *args), account=account, shop=shop, browser=browser)
+        shown = ["tb", *(["--browser", browser] if browser else []), *(["--account", account] if account else []),
+                 *(["--shop", shop] if shop else []), p, command, *args]
         return deliver(" ".join(shown), code, out, err, slug=f"{p}-{command}")
 
     @mcp.tool(description="切换账号（账号存在用户浏览器的取数桥插件里）：action=list 列出存过的账号和现在登录的是谁；"
                           "action=use 换成存过的某个账号（name 填 list 里的名字）；action=save 把浏览器里现在登录的账号存下来（name 是起的名字）；"
                           "action=check 查存下的账号还在不在（不切换，不填 name 就全部查）。"
                           "用户说「用某某店 / 某某账号的数据」时，先 list 找到对应的名字，再在 run 的 account 里填这个名字取数（不要先 use 再 run）。"
-                          "账号过期时不能替用户登录：请用户在浏览器里点插件图标重新登录。",
+                          "账号过期时不能替用户登录：请用户在浏览器里点插件图标重新登录。"
+                          "几个浏览器都装了取数桥、报错列出各浏览器登录的账号时，browser 填要操作的那个浏览器的账号名或插件编号。",
               annotations=ToolAnnotations(read_only_hint=False, destructive_hint=False, idempotent_hint=True, open_world_hint=False))
-    async def account(action: str = "list", name: str = "") -> str:
+    async def account(action: str = "list", name: str = "", browser: str = "") -> str:
         if action not in ("list", "use", "save", "check"):
             raise ToolError("action 只能是 list、use、save 或 check。")
         if action == "use" and not name:
             raise ToolError("换账号要给 name（先用 action=list 看有哪些名字）。")
         argv = ["account", action] + ([name] if name else [])
-        code, out, err = await execute(tb_argv(*argv), timeout=180)
+        code, out, err = await execute(tb_argv(*argv), timeout=180, browser=browser.strip())
         return deliver("tb " + " ".join(argv), code, out, err, slug=f"account-{action}")
 
     @mcp.tool(name="modules", description="工具模块：action=list 列出全部工具、哪些打开了；action=enable 打开 names 里的工具，没装的会自动下载（要先征得用户同意）。"
