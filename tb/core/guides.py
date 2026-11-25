@@ -17,6 +17,7 @@ from pathlib import Path
 from .paths import machine_root
 
 PACKAGE = Path(__file__).resolve().parents[2] / "references"   # 打包时从 delivery/<产品>/references 拷来
+FAQ_TOPIC = "常见问题"   # 包根目录的 常见问题.md（打包时从 delivery/full/ 拷来）：会不会封号、稳不稳定、怎么连接这类问题
 COMPANY_DIRNAME = "分析要求"
 NOTE_FILE = "使用说明.txt"
 NOTE = """本文件夹用于保存你的团队自己的分析要求。AI 助手生成报告前会先读取这里的要求，没有对应要求时才使用工具自带的通用分析方法。
@@ -76,11 +77,17 @@ def package_topics() -> dict[str, tuple[str, str]]:
     return _named(_split(PACKAGE))
 
 
+def faq_topics() -> dict[str, tuple[str, str]]:
+    """包根目录的常见问题整份一个主题（开发仓库里没有这个文件，就没有这个主题）。"""
+    faq = PACKAGE.parent / f"{FAQ_TOPIC}.md"
+    return {FAQ_TOPIC: ("", faq.read_text(encoding="utf-8").strip())} if faq.is_file() else {}
+
+
 def topics() -> dict[str, tuple[str, str]]:
     """全部主题：公司的在前；通用的和公司的同名时，通用的改叫「<主题>（通用版）」。"""
     mine = company_topics()
     out = dict(mine)
-    for name, body in package_topics().items():
+    for name, body in {**faq_topics(), **package_topics()}.items():
         out[f"{name}（通用版）" if name in mine else name] = body
     return out
 
@@ -97,6 +104,9 @@ def find(topic: str) -> tuple[str, tuple[str, str]] | None:
 def listing() -> str:
     mine, ours = company_topics(), package_topics()
     lines = []
+    if faq_topics():
+        name = f"{FAQ_TOPIC}（通用版）" if FAQ_TOPIC in mine else FAQ_TOPIC   # 公司要求里也有「常见问题」时，查询名和 topics() 一致
+        lines.append(f"{FAQ_TOPIC}（用户问会不会封号、稳不稳定、怎么连接、取不到数怎么办时先看）：\n· {name}\n")
     if mine:
         lines.append("自定义分析要求（优先使用）：")
         lines += [f"· {t}" for t in mine]
@@ -112,7 +122,7 @@ def show(topic: str) -> str:
     if not hit:
         raise KeyError(topic)
     name, body = hit
-    origin = "自定义分析要求" if name in company_topics() else "通用分析方法"
+    origin = "自定义分析要求" if name in company_topics() else FAQ_TOPIC if name == FAQ_TOPIC else "通用分析方法"
     return f"【{origin}：{name}】\n\n" + "\n\n".join(x for x in body if x)
 
 
